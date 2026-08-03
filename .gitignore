@@ -1,0 +1,6 @@
+bin/
+obj/
+.vs/
+projects/
+assets/
+*.user

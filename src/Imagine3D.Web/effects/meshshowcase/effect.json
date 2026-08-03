@@ -1,0 +1,19 @@
+{
+  "id": "meshshowcase",
+  "name": "Object showcase",
+  "kind": "scene3d",
+  "module": true,
+  "tags": ["showcase", "mechanical", "structure", "creature", "vehicle", "scifi", "cinematic"],
+  "energyRange": [0.2, 0.85],
+  "aspects": ["16:9", "9:16"],
+  "cost": "medium",
+  "description": "A model from the asset library rotating on a plinth with rim lighting and a beat-driven pulse. Falls back to procedural geometry if the asset catalogue is empty.",
+  "params": {
+    "spin": { "type": "float", "default": "0.35 + 0.3*energy", "min": -3, "max": 3 },
+    "distance": { "type": "float", "default": "2.1 - 0.18*beatPulse", "min": 0.8, "max": 6 },
+    "tilt": { "type": "float", "default": "0.25", "min": -1.2, "max": 1.2 },
+    "rim": { "type": "float", "default": "0.8 + 0.7*high", "min": 0, "max": 3 },
+    "wire": { "type": "float", "default": "0.0", "min": 0, "max": 1,
+              "description": "1 draws the model as glowing wireframe-ish facets instead of solid." }
+  }
+}

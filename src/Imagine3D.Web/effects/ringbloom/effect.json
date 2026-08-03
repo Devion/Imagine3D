@@ -1,0 +1,20 @@
+{
+  "id": "ringbloom",
+  "name": "Ring bloom",
+  "kind": "scene2d",
+  "tags": ["psychedelic", "abstract", "glow", "fractal", "geometric", "dream", "cosmic"],
+  "energyRange": [0.15, 0.9],
+  "aspects": ["16:9", "9:16"],
+  "cost": "low",
+  "description": "Space folded into itself repeatedly, each layer drawing a thin glowing ring — endless nested neon rings that breathe with the track. Very cheap for how it looks.",
+  "shader": "shader.frag",
+  "params": {
+    "layers": { "type": "float", "default": "4.0", "min": 1, "max": 8 },
+    "zoom": { "type": "float", "default": "1.5", "min": 1.05, "max": 3,
+              "description": "Fold scale per layer. Higher packs more rings in." },
+    "rings": { "type": "float", "default": "8.0 + 3.0*bass", "min": 1, "max": 24 },
+    "sharp": { "type": "float", "default": "1.2", "min": 0.4, "max": 3,
+               "description": "Thinner, hotter filaments as this rises." },
+    "speed": { "type": "float", "default": "0.4 + 0.5*energy", "min": 0, "max": 3 }
+  }
+}

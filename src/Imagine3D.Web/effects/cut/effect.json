@@ -1,0 +1,11 @@
+{
+  "id": "cut",
+  "name": "Hard cut",
+  "kind": "transition",
+  "tags": ["hard", "impact"],
+  "energyRange": [0, 1],
+  "cost": "low",
+  "description": "Instant cut with a single-frame white flash. What a drop wants.",
+  "shader": "shader.frag",
+  "params": {}
+}

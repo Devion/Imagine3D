@@ -1,0 +1,18 @@
+{
+  "id": "vectorballs",
+  "name": "Vector balls",
+  "kind": "scene2d",
+  "tags": ["amiga", "retro", "showcase", "geometric", "mechanical", "structure"],
+  "energyRange": [0.25, 0.9],
+  "aspects": ["16:9", "9:16"],
+  "cost": "medium",
+  "description": "A rotating 3D formation of shaded spheres, depth-sorted and drawn as sprites — the effect every Amiga demo used to prove it could do 3D.",
+  "shader": "shader.frag",
+  "params": {
+    "count": { "type": "float", "default": "28.0", "min": 6, "max": 48 },
+    "radius": { "type": "float", "default": "0.11 + 0.03*beatPulse", "min": 0.02, "max": 0.4 },
+    "spin": { "type": "float", "default": "0.7 + 0.5*energy", "min": -3, "max": 3 },
+    "shape": { "type": "float", "default": "0.0", "min": 0, "max": 2,
+               "description": "0 double helix, 1 ring, 2 sphere shell." }
+  }
+}

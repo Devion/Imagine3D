@@ -1,0 +1,17 @@
+{
+  "id": "twister",
+  "name": "Twister",
+  "kind": "scene2d",
+  "tags": ["amiga", "retro", "geometric", "mechanical", "showcase"],
+  "energyRange": [0.2, 0.8],
+  "aspects": ["16:9", "9:16"],
+  "cost": "low",
+  "description": "The rotating twisted column — four shaded faces whose vertical twist rate rides the music.",
+  "shader": "shader.frag",
+  "params": {
+    "twist": { "type": "float", "default": "2.4 + 1.6*mid", "min": 0, "max": 8 },
+    "spin": { "type": "float", "default": "0.9 + 0.6*energy", "min": -4, "max": 4 },
+    "width": { "type": "float", "default": "0.34 + 0.06*beatPulse", "min": 0.05, "max": 0.8 },
+    "wobble": { "type": "float", "default": "0.06", "min": 0, "max": 0.5 }
+  }
+}

@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Imagine3D</title>
+  <link rel="stylesheet" href="ui/style.css">
+</head>
+<body>
+  <!-- The offline render draws here at full output resolution. It is kept out of
+       the layout rather than display:none so the drawing buffer stays valid. -->
+  <canvas id="render-canvas" width="16" height="16"></canvas>
+
+  <header class="topbar">
+    <div class="brand">Imagine<span>3D</span></div>
+    <div class="project-picker">
+      <select id="project-select" title="Project"></select>
+      <button id="btn-new" class="ghost" title="New project">+ New</button>
+    </div>
+    <div class="spacer"></div>
+    <div id="conn" class="conn" title="Backend connection">connecting</div>
+  </header>
+
+  <main id="main">
+    <!-- ---------------------------------------------------- empty state -->
+    <section id="view-empty" class="view">
+      <div class="empty">
+        <h1>Turn an MP3 into a demo</h1>
+        <p>Create a project, drop in a song, and the engine picks every scene,
+           effect and transition from the music itself.</p>
+        <button id="btn-new-2" class="primary big">Create a project</button>
+      </div>
+    </section>
+
+    <!-- ---------------------------------------------------- project view -->
+    <section id="view-project" class="view hidden">
+      <aside class="sidebar">
+        <div class="panel">
+          <h2>Source</h2>
+          <div id="source-info" class="source-info">
+            <div class="muted">No MP3 imported yet.</div>
+          </div>
+          <button id="btn-import" class="primary full">Choose MP3…</button>
+          <div id="import-fallback" class="fallback hidden">
+            <input id="import-path" type="text" placeholder="D:\path\to\song.mp3" spellcheck="false">
+            <button id="btn-import-path" class="ghost">Import</button>
+          </div>
+          <p class="hint">A <code>song.txt</code> next to the MP3 is picked up
+             automatically for lyrics and <code>Style:</code> directives.</p>
+        </div>
+
+        <div class="panel">
+          <h2>Output</h2>
+          <label class="field">
+            <span>Aspect</span>
+            <div class="segmented" id="aspect">
+              <button data-value="16:9" class="active">16:9</button>
+              <button data-value="9:16">9:16</button>
+            </div>
+          </label>
+          <label class="field"><span>Frame rate</span>
+            <select id="fps">
+              <option value="24">24 — filmic</option>
+              <option value="30" selected>30 — default</option>
+              <option value="60">60 — snappy sync</option>
+            </select>
+          </label>
+          <label class="field"><span>Encoder</span>
+            <select id="encoder">
+              <option value="libx264">x264 — compatible</option>
+              <option value="h264_nvenc">NVENC H.264 — fast</option>
+              <option value="hevc_nvenc">NVENC HEVC — fast, smaller</option>
+            </select>
+          </label>
+          <label class="field"><span>Quality (CRF)</span>
+            <input id="crf" type="range" min="12" max="30" value="18">
+            <output id="crf-out">18</output>
+          </label>
+          <label class="field"><span>Supersample</span>
+            <select id="supersample">
+              <option value="1" selected>1× — fastest</option>
+              <option value="2">2× — crisper</option>
+            </select>
+          </label>
+          <label class="field"><span>Seed</span>
+            <div class="row">
+              <input id="seed" type="number" min="1" value="1">
+              <button id="btn-reroll" class="ghost" title="New seed — different scene choices">Reroll</button>
+            </div>
+          </label>
+        </div>
+
+        <div class="panel">
+          <h2>Tempo</h2>
+          <div id="bpm-readout" class="muted">Run analysis first.</div>
+          <label class="field"><span>Override BPM</span>
+            <input id="bpm-override" type="number" min="40" max="220" step="0.1" placeholder="auto">
+          </label>
+          <p class="hint">Beat tracking is unreliable on rubato material. If the
+             confidence reads low, pin the tempo here.</p>
+        </div>
+
+        <div class="panel">
+          <h2>LTX clips</h2>
+          <label class="check">
+            <input id="ltx-enabled" type="checkbox">
+            <span>Mix in AI video snippets</span>
+          </label>
+          <label class="field"><span>Max inserts</span>
+            <input id="ltx-count" type="number" min="1" max="20" value="6">
+          </label>
+          <label class="field"><span>Init frame</span>
+            <select id="ltx-init">
+              <option value="render">From the 3D scene</option>
+              <option value="sdxl">Fresh SDXL keyframe</option>
+            </select>
+          </label>
+          <p class="hint">Requires ComfyUI with LTX. Clips are cached, so a
+             re-render never regenerates them.</p>
+        </div>
+      </aside>
+
+      <div class="content">
+        <div class="actions">
+          <button id="btn-analyze" class="primary">Analyse audio</button>
+          <button id="btn-generate" class="primary accent" disabled>Generate video</button>
+          <button id="btn-cancel" class="ghost hidden">Cancel</button>
+          <label class="check inline">
+            <input id="use-llm" type="checkbox" checked>
+            <span>Use LLM for visual intent</span>
+          </label>
+        </div>
+
+        <!-- The generation chain, always visible so the user knows what happens. -->
+        <div class="panel chain">
+          <h2>Generation chain</h2>
+          <ol id="stages" class="stages"></ol>
+          <div id="thumb-wrap" class="thumb-wrap hidden">
+            <img id="thumb" alt="Frame being rendered">
+            <div class="thumb-caption">live frame</div>
+          </div>
+        </div>
+
+        <div id="warnings" class="warnings hidden"></div>
+
+        <div id="analysis-panel" class="panel hidden">
+          <h2>Analysis</h2>
+          <div id="analysis-summary" class="summary"></div>
+          <canvas id="waveform" height="150"></canvas>
+          <div id="section-strip" class="section-strip"></div>
+        </div>
+
+        <div id="storyboard-panel" class="panel hidden">
+          <h2>Storyboard <span id="sb-meta" class="muted"></span></h2>
+          <div id="storyboard" class="storyboard"></div>
+        </div>
+
+        <div id="result-panel" class="panel hidden">
+          <h2>Result</h2>
+          <video id="result-video" controls preload="metadata"></video>
+          <div class="row">
+            <button id="btn-open-folder" class="ghost">Show output folder</button>
+            <span id="result-path" class="muted"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Installed before the app module so a failure to even load it is reported.
+       Running as a desktop window there is no console to read otherwise. -->
+  <script>
+    (function () {
+      function report(level, message, stack) {
+        try {
+          fetch('api/clientlog', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ level: level, message: String(message), stack: stack || null }),
+          });
+        } catch (e) { /* nothing more we can do */ }
+      }
+      window.addEventListener('error', function (e) {
+        report('error', e.message + ' @ ' + (e.filename || '?') + ':' + (e.lineno || 0),
+               e.error && e.error.stack);
+      });
+      window.addEventListener('unhandledrejection', function (e) {
+        var r = e.reason;
+        report('error', (r && r.message) || String(r), r && r.stack);
+      });
+      window.__report = report;
+    })();
+  </script>
+  <script type="module" src="ui/app.js"></script>
+</body>
+</html>

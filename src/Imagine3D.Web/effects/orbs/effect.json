@@ -1,0 +1,21 @@
+{
+  "id": "orbs",
+  "name": "Orbs / wormhole",
+  "kind": "raymarch",
+  "tags": ["space", "cosmic", "geometric", "showcase", "psychedelic", "structure", "build", "tension"],
+  "energyRange": [0.2, 1.0],
+  "aspects": ["16:9", "9:16"],
+  "cost": "high",
+  "description": "A ring of glossy 3D orbs rotating in space that funnels into a wormhole as the scene runs. The `wormhole` parameter morphs between the two, so one scene can start as an orbiting ring and end as a tunnel.",
+  "shader": "shader.frag",
+  "params": {
+    "wormhole": { "type": "float", "default": "smoothstep(0.2, 0.85, sceneT)", "min": 0, "max": 1,
+                  "description": "0 = a rotating ring of orbs, 1 = orbs funnelling into a wormhole." },
+    "count": { "type": "float", "default": "9.0", "min": 3, "max": 24,
+               "description": "Orbs around the ring." },
+    "radius": { "type": "float", "default": "0.34 + 0.06*beatPulse", "min": 0.05, "max": 0.9 },
+    "spin": { "type": "float", "default": "0.5 + 0.6*energy", "min": -4, "max": 4 },
+    "speed": { "type": "float", "default": "0.8 + 1.6*energy", "min": 0, "max": 6 },
+    "steps": { "type": "float", "default": "72.0", "min": 24, "max": 160 }
+  }
+}

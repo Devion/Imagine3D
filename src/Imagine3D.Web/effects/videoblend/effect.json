@@ -1,0 +1,11 @@
+{
+  "id": "videoblend",
+  "name": "LTX clip blend",
+  "kind": "post",
+  "tags": ["utility"],
+  "energyRange": [0, 1],
+  "cost": "low",
+  "description": "Composites an LTX video clip over the scene using the storyboard's blend mode (screen/multiply/difference/XOR/...).",
+  "shader": "shader.frag",
+  "params": {}
+}

@@ -1,0 +1,15 @@
+{
+  "id": "spiralout",
+  "name": "Spiral out",
+  "kind": "transition",
+  "tags": ["wipe", "geometric", "psychedelic", "impact"],
+  "energyRange": [0, 1],
+  "cost": "low",
+  "description": "The incoming scene unwinds outward from the centre, throwing the old one off the edges.",
+  "shader": "shader.frag",
+  "params": {
+    "turns": { "type": "float", "default": "2.5", "min": 0.5, "max": 8 },
+    "swirl": { "type": "float", "default": "2.8", "min": 0, "max": 8 },
+    "zoom": { "type": "float", "default": "0.45", "min": 0, "max": 2 }
+  }
+}

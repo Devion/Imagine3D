@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="src/Imagine3D.Core/Imagine3D.Core.csproj" />
+  <Project Path="src/Imagine3D.App/Imagine3D.App.csproj" />
+  <Project Path="src/Imagine3D.Tests/Imagine3D.Tests.csproj" />
+</Solution>

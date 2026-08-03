@@ -1,0 +1,17 @@
+{
+  "id": "starfield",
+  "name": "Starfield",
+  "kind": "scene2d",
+  "tags": ["space", "cosmic", "retro", "amiga", "vast", "calm", "sparse"],
+  "energyRange": [0.0, 0.8],
+  "aspects": ["16:9", "9:16"],
+  "cost": "low",
+  "description": "Perspective-projected 3D starfield flying toward the camera. Speed rides the track and stars streak on transients.",
+  "shader": "shader.frag",
+  "params": {
+    "speed": { "type": "float", "default": "0.5 + 2.5*energy + 1.5*beatPulse", "min": 0, "max": 8 },
+    "density": { "type": "float", "default": "80.0", "min": 10, "max": 300 },
+    "streak": { "type": "float", "default": "0.15 + 0.6*onset", "min": 0, "max": 1 },
+    "warp": { "type": "float", "default": "0.0 + 0.6*barPulse*energy", "min": 0, "max": 2 }
+  }
+}

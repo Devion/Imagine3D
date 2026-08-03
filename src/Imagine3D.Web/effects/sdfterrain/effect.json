@@ -1,0 +1,18 @@
+{
+  "id": "sdfterrain",
+  "name": "Terrain flyover",
+  "kind": "raymarch",
+  "tags": ["vast", "cinematic", "organic", "structure", "calm", "dream"],
+  "energyRange": [0.1, 0.75],
+  "aspects": ["16:9", "9:16"],
+  "cost": "high",
+  "description": "Low-flying pass over ridged fractal mountains with height-banded colour and horizon haze.",
+  "shader": "shader.frag",
+  "params": {
+    "speed": { "type": "float", "default": "1.6 + 2.0*energy", "min": 0, "max": 8 },
+    "height": { "type": "float", "default": "1.0 + 0.35*bass", "min": 0.2, "max": 3 },
+    "bands": { "type": "float", "default": "0.0", "min": 0, "max": 16,
+               "description": "0 = smooth height colouring; >2 quantises to contour bands." },
+    "altitude": { "type": "float", "default": "1.5", "min": 0.3, "max": 5 }
+  }
+}

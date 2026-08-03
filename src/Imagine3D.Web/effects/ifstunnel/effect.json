@@ -1,0 +1,20 @@
+{
+  "id": "ifstunnel",
+  "name": "IFS tunnel",
+  "kind": "raymarch",
+  "tags": ["geometric", "structure", "mechanical", "psychedelic", "space", "scifi", "build", "high-energy"],
+  "energyRange": [0.35, 1.0],
+  "aspects": ["16:9", "9:16"],
+  "cost": "high",
+  "description": "Flight through a kaleidoscopically folded lattice of boxes, accumulated as volumetric glow with pulses of brightness travelling down the tunnel. Technique after the 'Phantom Mode' family of Shadertoys.",
+  "shader": "shader.frag",
+  "params": {
+    "folds": { "type": "float", "default": "5.0", "min": 1, "max": 8 },
+    "sectors": { "type": "float", "default": "5.0", "min": 2, "max": 12,
+                 "description": "Kaleidoscope sectors around the tunnel axis." },
+    "speed": { "type": "float", "default": "2.0 + 2.5*energy", "min": 0, "max": 10 },
+    "glow": { "type": "float", "default": "1.0 + 0.7*beatPulse", "min": 0.1, "max": 4 },
+    "pulse": { "type": "float", "default": "1.0", "min": 0, "max": 3,
+               "description": "Brightness waves running down the tunnel." }
+  }
+}

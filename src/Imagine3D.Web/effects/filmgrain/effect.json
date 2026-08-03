@@ -1,0 +1,17 @@
+{
+  "id": "filmgrain",
+  "name": "Grain + vignette",
+  "kind": "post",
+  "tags": ["cinematic", "retro", "cold", "organic"],
+  "energyRange": [0, 1],
+  "aspects": ["16:9", "9:16"],
+  "cost": "low",
+  "description": "Animated grain, vignette and a gentle gate weave. Takes the digital edge off a shader-perfect frame.",
+  "shader": "shader.frag",
+  "params": {
+    "grain": { "type": "float", "default": "0.055", "min": 0, "max": 0.3 },
+    "vignette": { "type": "float", "default": "0.45", "min": 0, "max": 1.5 },
+    "weave": { "type": "float", "default": "0.0008", "min": 0, "max": 0.01 },
+    "lift": { "type": "float", "default": "0.012", "min": 0, "max": 0.1 }
+  }
+}

@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Imagine3D.App</RootNamespace>
+    <AssemblyName>Imagine3D</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Photino ships native bits per-RID; pin so the loader finds them. -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Photino.NET" Version="4.0.16" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Imagine3D.Core\Imagine3D.Core.csproj" />
+  </ItemGroup>
+
+  <!-- The whole web app (UI + engine + effects) is served from disk by Kestrel,
+       so it must land next to the exe. PreserveNewest means editing a shader and
+       rebuilding is enough - no rebuild needed if you point at the source dir. -->
+  <ItemGroup>
+    <Content Include="..\Imagine3D.Web\**\*" LinkBase="wwwroot\">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\workflows\**\*" LinkBase="workflows\">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\Imagine3D.Core\Lyrics\whisper_align.py" Link="whisper_align.py">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

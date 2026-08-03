@@ -1,0 +1,17 @@
+{
+  "id": "aurora",
+  "name": "Aurora",
+  "kind": "raymarch",
+  "tags": ["cold", "vast", "cosmic", "dream", "calm", "sparse", "organic", "cinematic"],
+  "energyRange": [0.0, 0.6],
+  "aspects": ["16:9", "9:16"],
+  "cost": "high",
+  "description": "Northern-lights curtains rippling over a starfield: a volume of thin vertical sheets accumulated front to back, brightening from the base upward.",
+  "shader": "shader.frag",
+  "params": {
+    "curtains": { "type": "float", "default": "0.55 + 0.35*mid", "min": 0.05, "max": 2 },
+    "speed": { "type": "float", "default": "0.25 + 0.3*energy", "min": 0, "max": 2 },
+    "steps": { "type": "float", "default": "40.0", "min": 12, "max": 90 },
+    "spread": { "type": "float", "default": "1.0", "min": 0.2, "max": 3 }
+  }
+}

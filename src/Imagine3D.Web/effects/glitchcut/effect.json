@@ -1,0 +1,11 @@
+{
+  "id": "glitchcut",
+  "name": "Glitch cut",
+  "kind": "transition",
+  "tags": ["hard", "impact", "glitch", "sharp"],
+  "energyRange": [0.5, 1],
+  "cost": "low",
+  "description": "Datamosh-style slice displacement and RGB tearing across the cut. For drops and breakdowns.",
+  "shader": "shader.frag",
+  "params": {}
+}

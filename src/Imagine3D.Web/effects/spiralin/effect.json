@@ -1,0 +1,14 @@
+{
+  "id": "spiralin",
+  "name": "Spiral in",
+  "kind": "transition",
+  "tags": ["wipe", "geometric", "psychedelic"],
+  "energyRange": [0, 1],
+  "cost": "low",
+  "description": "The incoming scene spirals inward from the edges, twisting as it closes on the centre.",
+  "shader": "shader.frag",
+  "params": {
+    "turns": { "type": "float", "default": "2.5", "min": 0.5, "max": 8 },
+    "swirl": { "type": "float", "default": "2.2", "min": 0, "max": 8 }
+  }
+}

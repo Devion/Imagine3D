@@ -1,0 +1,18 @@
+{
+  "id": "neontunnel",
+  "name": "Neon flight",
+  "kind": "raymarch",
+  "tags": ["scifi", "space", "mechanical", "structure", "glow", "cinematic", "build", "high-energy"],
+  "energyRange": [0.35, 1.0],
+  "aspects": ["16:9", "9:16"],
+  "cost": "high",
+  "description": "Flight along a curving corridor with two coloured light strands weaving through it, lit entirely by glow accumulation. The camera follows the same spline the tunnel does, so it banks through the turns.",
+  "shader": "shader.frag",
+  "params": {
+    "speed": { "type": "float", "default": "160.0 + 120.0*energy", "min": 20, "max": 500 },
+    "curve": { "type": "float", "default": "1.0", "min": 0, "max": 2.5,
+               "description": "How much the corridor snakes." },
+    "strands": { "type": "float", "default": "1.0 + 0.8*beatPulse", "min": 0, "max": 3 },
+    "glow": { "type": "float", "default": "1.0", "min": 0.2, "max": 3 }
+  }
+}

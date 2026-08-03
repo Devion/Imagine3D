@@ -1,0 +1,15 @@
+{
+  "id": "ripplewipe",
+  "name": "Ripple",
+  "kind": "transition",
+  "tags": ["soft", "dissolve", "water", "fluid", "psychedelic"],
+  "energyRange": [0, 0.8],
+  "cost": "low",
+  "description": "A wave front expands from the centre, refracting both scenes as it passes and leaving the incoming one behind it.",
+  "shader": "shader.frag",
+  "params": {
+    "waves": { "type": "float", "default": "9.0", "min": 1, "max": 30 },
+    "strength": { "type": "float", "default": "0.05", "min": 0, "max": 0.3 },
+    "width": { "type": "float", "default": "0.28", "min": 0.05, "max": 1 }
+  }
+}

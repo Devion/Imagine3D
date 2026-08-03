@@ -1,0 +1,18 @@
+{
+  "id": "feedback",
+  "name": "Feedback trails",
+  "kind": "post",
+  "tags": ["psychedelic", "dream", "abstract", "glow", "organic"],
+  "energyRange": [0.15, 0.9],
+  "aspects": ["16:9", "9:16"],
+  "cost": "low",
+  "conflicts": ["kaleidoscope"],
+  "description": "Blends the previous frame back in with a zoom and rotation — motion trails, infinite-zoom echoes, video feedback.",
+  "shader": "shader.frag",
+  "params": {
+    "decay": { "type": "float", "default": "0.82 + 0.1*energy", "min": 0, "max": 0.98 },
+    "zoom": { "type": "float", "default": "1.014 + 0.02*beatPulse", "min": 0.9, "max": 1.15 },
+    "rotate": { "type": "float", "default": "0.004", "min": -0.1, "max": 0.1 },
+    "hueShift": { "type": "float", "default": "0.006", "min": -0.1, "max": 0.1 }
+  }
+}

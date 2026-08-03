@@ -1,0 +1,11 @@
+{
+  "id": "fade",
+  "name": "Crossfade",
+  "kind": "transition",
+  "tags": ["soft", "dissolve"],
+  "energyRange": [0, 1],
+  "cost": "low",
+  "description": "Plain crossfade with a slight ease. The safe default.",
+  "shader": "shader.frag",
+  "params": {}
+}

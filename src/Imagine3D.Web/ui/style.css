@@ -1,0 +1,288 @@
+:root {
+  --bg: #0b0d12;
+  --panel: #141822;
+  --panel-2: #1b2130;
+  --line: #262d3d;
+  --text: #e6ebf5;
+  --muted: #8792a8;
+  --accent: #4ea8ff;
+  --accent-2: #ff4ea8;
+  --ok: #46d18a;
+  --warn: #ffb347;
+  --err: #ff6b6b;
+  --radius: 10px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 "Segoe UI", system-ui, sans-serif;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* The render target lives outside the layout but must keep a real drawing
+   buffer, so it is moved off-screen rather than hidden. */
+#render-canvas {
+  position: fixed;
+  left: -20000px;
+  top: 0;
+  pointer-events: none;
+}
+
+.hidden { display: none !important; }
+.muted { color: var(--muted); }
+.spacer { flex: 1; }
+
+/* ------------------------------------------------------------------ topbar */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+
+.brand { font-weight: 700; letter-spacing: 0.5px; }
+.brand span { color: var(--accent); }
+
+.project-picker { display: flex; gap: 8px; align-items: center; }
+
+.conn {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--muted);
+}
+.conn.ok { color: var(--ok); }
+.conn.bad { color: var(--err); }
+
+/* ------------------------------------------------------------------ layout */
+
+main { flex: 1; overflow: hidden; }
+.view { height: 100%; }
+
+#view-project { display: flex; height: 100%; }
+
+.sidebar {
+  width: 320px;
+  flex: none;
+  overflow-y: auto;
+  padding: 14px;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+}
+.sidebar .panel { background: var(--panel-2); }
+
+.panel h2 {
+  margin: 0 0 10px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------------ controls */
+
+button {
+  font: inherit;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 7px 14px;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+button.primary { background: #22304a; border-color: #33456a; }
+button.primary.accent { background: #2a3f66; border-color: var(--accent); }
+button.ghost { background: transparent; }
+button.big { padding: 12px 28px; font-size: 16px; }
+button.full { width: 100%; }
+
+select, input[type="text"], input[type="number"] {
+  font: inherit;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+  min-width: 0;
+}
+
+input[type="range"] { flex: 1; accent-color: var(--accent); }
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 9px;
+  font-size: 13px;
+}
+.field > span:first-child { width: 105px; flex: none; color: var(--muted); }
+.field > select, .field > input { flex: 1; }
+.field .row { display: flex; gap: 6px; flex: 1; }
+.field .row input { flex: 1; }
+
+.check { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; font-size: 13px; }
+.check.inline { margin: 0 0 0 8px; }
+.check input { accent-color: var(--accent); }
+
+.segmented { display: flex; gap: 4px; }
+.segmented button { padding: 5px 12px; font-size: 13px; }
+.segmented button.active { background: #2a3f66; border-color: var(--accent); }
+
+.hint { font-size: 11.5px; color: var(--muted); margin: 8px 0 0; }
+.hint code { background: var(--bg); padding: 1px 4px; border-radius: 4px; }
+
+.fallback { display: flex; gap: 6px; margin-top: 8px; }
+.fallback input { flex: 1; }
+
+.row { display: flex; gap: 8px; align-items: center; }
+
+.actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* ------------------------------------------------------------------ empty */
+
+.empty {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+}
+.empty h1 { margin: 0; font-size: 30px; }
+.empty p { color: var(--muted); max-width: 460px; margin: 0 0 18px; }
+
+/* ------------------------------------------------------------------ stages */
+
+.stages { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+
+.stage {
+  display: grid;
+  grid-template-columns: 24px 130px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.stage .num {
+  width: 22px; height: 22px; line-height: 21px; text-align: center;
+  border-radius: 50%; background: var(--panel-2); color: var(--muted); font-size: 11px;
+  border: 1px solid var(--line);
+}
+.stage .name { color: var(--muted); }
+.stage .bar {
+  height: 8px; background: var(--panel-2); border-radius: 999px; overflow: hidden;
+  border: 1px solid var(--line);
+}
+.stage .fill { height: 100%; width: 0; background: var(--accent); transition: width 0.18s linear; }
+.stage .detail { color: var(--muted); font-size: 12px; white-space: nowrap;
+                 overflow: hidden; text-overflow: ellipsis; max-width: 420px; }
+
+.stage.active .num { background: #2a3f66; color: var(--text); border-color: var(--accent); }
+.stage.active .name { color: var(--text); }
+.stage.done .num { background: #1d3d2c; color: var(--ok); border-color: var(--ok); }
+.stage.done .fill { background: var(--ok); }
+.stage.failed .num { background: #3d1d1d; color: var(--err); border-color: var(--err); }
+.stage.failed .fill { background: var(--err); }
+.stage.skipped .detail { opacity: 0.6; }
+
+.chain { position: relative; }
+.thumb-wrap { position: absolute; top: 12px; right: 12px; text-align: center; }
+.thumb-wrap img { width: 200px; border-radius: 6px; border: 1px solid var(--line); display: block; }
+.thumb-caption { font-size: 10.5px; color: var(--muted); margin-top: 3px; }
+
+/* ------------------------------------------------------------------ warnings */
+
+.warnings {
+  border: 1px solid var(--warn);
+  background: #2a2213;
+  color: #ffd9a0;
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: 13px;
+}
+.warnings ul { margin: 6px 0 0; padding-left: 18px; }
+.warnings.error { border-color: var(--err); background: #2b1618; color: #ffc9c9; }
+
+/* ------------------------------------------------------------------ analysis */
+
+.summary { display: flex; flex-wrap: wrap; gap: 18px; margin-bottom: 12px; font-size: 13px; }
+.summary b { color: var(--accent); font-weight: 600; }
+.summary .conf-low b { color: var(--warn); }
+
+#waveform { width: 100%; display: block; border-radius: 6px; background: #090b10; }
+
+.section-strip { display: flex; gap: 2px; margin-top: 6px; height: 26px; }
+.section-strip div {
+  flex-grow: 1; border-radius: 3px; font-size: 10px; color: #0b0d12;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+  font-weight: 600; cursor: default;
+}
+
+/* ------------------------------------------------------------------ storyboard */
+
+.storyboard { display: flex; flex-direction: column; gap: 6px; max-height: 340px; overflow-y: auto; }
+
+.scene {
+  display: grid;
+  grid-template-columns: 38px 92px 1fr;
+  gap: 10px;
+  align-items: baseline;
+  padding: 7px 9px;
+  background: var(--panel-2);
+  border-radius: 7px;
+  border-left: 3px solid var(--accent);
+  font-size: 12.5px;
+}
+.scene .idx { color: var(--muted); font-variant-numeric: tabular-nums; }
+.scene .time { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 11.5px; }
+.scene .eff { font-weight: 600; }
+.scene .meta { color: var(--muted); font-size: 11.5px; }
+.scene .chips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 3px; }
+.scene .chip {
+  font-size: 10.5px; padding: 1px 7px; border-radius: 999px;
+  background: #202838; color: var(--muted);
+}
+
+/* ------------------------------------------------------------------ result */
+
+#result-video { width: 100%; max-height: 62vh; border-radius: 8px; background: #000; display: block; margin-bottom: 10px; }

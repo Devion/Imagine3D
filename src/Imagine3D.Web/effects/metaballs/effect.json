@@ -1,0 +1,17 @@
+{
+  "id": "metaballs",
+  "name": "Metaballs",
+  "kind": "scene2d",
+  "tags": ["amiga", "retro", "organic", "psychedelic", "abstract", "fluid"],
+  "energyRange": [0.15, 0.75],
+  "aspects": ["16:9", "9:16"],
+  "cost": "low",
+  "description": "Blobs on lissajous paths merging by summed inverse-square fields, contoured into hard palette bands.",
+  "shader": "shader.frag",
+  "params": {
+    "count": { "type": "float", "default": "6.0", "min": 2, "max": 12 },
+    "size": { "type": "float", "default": "0.13 + 0.06*bass", "min": 0.02, "max": 0.5 },
+    "speed": { "type": "float", "default": "0.4 + 0.5*energy", "min": 0, "max": 3 },
+    "bands": { "type": "float", "default": "7.0", "min": 0, "max": 24 }
+  }
+}

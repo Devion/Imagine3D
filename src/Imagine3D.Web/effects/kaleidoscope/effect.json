@@ -1,0 +1,17 @@
+{
+  "id": "kaleidoscope",
+  "name": "Kaleidoscope",
+  "kind": "post",
+  "tags": ["psychedelic", "geometric", "dream", "abstract", "fractal"],
+  "energyRange": [0.25, 1.0],
+  "aspects": ["16:9", "9:16"],
+  "cost": "low",
+  "conflicts": ["feedback"],
+  "description": "Mirrors the frame into N radial wedges. Turns any scene into a mandala; the wedge count steps on the bar.",
+  "shader": "shader.frag",
+  "params": {
+    "segments": { "type": "float", "default": "6.0", "min": 2, "max": 24 },
+    "spin": { "type": "float", "default": "0.12", "min": -2, "max": 2 },
+    "zoom": { "type": "float", "default": "1.0 + 0.12*beatPulse", "min": 0.2, "max": 3 }
+  }
+}

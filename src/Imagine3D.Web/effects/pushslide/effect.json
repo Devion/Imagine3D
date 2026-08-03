@@ -1,0 +1,16 @@
+{
+  "id": "pushslide",
+  "name": "Push slide",
+  "kind": "transition",
+  "tags": ["wipe", "hard", "mechanical", "retro"],
+  "energyRange": [0.2, 1],
+  "cost": "low",
+  "description": "The incoming scene shoves the outgoing one off the frame, with motion blur and a slight overshoot at the end.",
+  "shader": "shader.frag",
+  "params": {
+    "angle": { "type": "float", "default": "0.0", "min": 0, "max": 6.2832,
+               "description": "Push direction in radians. 0 pushes left." },
+    "blur": { "type": "float", "default": "0.5", "min": 0, "max": 2 },
+    "overshoot": { "type": "float", "default": "0.06", "min": 0, "max": 0.4 }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "id": "sceneblend",
+  "name": "Scene blend",
+  "kind": "post",
+  "tags": ["utility"],
+  "energyRange": [0, 1],
+  "cost": "low",
+  "description": "Composites the incoming scene over the outgoing one with the storyboard's blend mode. This is what lets two effects run layered instead of one cutting to the other.",
+  "shader": "shader.frag",
+  "params": {}
+}

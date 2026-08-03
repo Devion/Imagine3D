@@ -1,0 +1,17 @@
+{
+  "id": "blinds",
+  "name": "Venetian blinds",
+  "kind": "transition",
+  "tags": ["wipe", "geometric", "retro", "mechanical"],
+  "energyRange": [0, 1],
+  "cost": "low",
+  "description": "Slats open to reveal the incoming scene, with a shaded edge on each so they read as turning rather than just widening.",
+  "shader": "shader.frag",
+  "params": {
+    "slats": { "type": "float", "default": "14.0", "min": 2, "max": 60 },
+    "vertical": { "type": "float", "default": "0.0", "min": 0, "max": 1,
+                  "description": "0 horizontal slats, 1 vertical." },
+    "stagger": { "type": "float", "default": "0.35", "min": 0, "max": 1,
+                 "description": "How much later each successive slat opens." }
+  }
+}

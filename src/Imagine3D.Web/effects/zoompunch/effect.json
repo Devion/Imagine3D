@@ -1,0 +1,11 @@
+{
+  "id": "zoompunch",
+  "name": "Zoom punch",
+  "kind": "transition",
+  "tags": ["hard", "impact"],
+  "energyRange": [0.4, 1],
+  "cost": "low",
+  "description": "Outgoing scene rushes at the camera and blurs out while the incoming one snaps in from a slight zoom.",
+  "shader": "shader.frag",
+  "params": {}
+}

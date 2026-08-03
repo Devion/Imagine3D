@@ -1,0 +1,17 @@
+{
+  "id": "checkerfloor",
+  "name": "Checker floor",
+  "kind": "scene2d",
+  "tags": ["retro", "amiga", "geometric", "space", "structure", "showcase"],
+  "energyRange": [0.15, 0.8],
+  "aspects": ["16:9", "9:16"],
+  "cost": "low",
+  "description": "Infinite perspective checkerboard under a horizon and starfield — the ray-traced floor every 90s demo opened with.",
+  "shader": "shader.frag",
+  "params": {
+    "speed": { "type": "float", "default": "1.2 + 1.8*energy", "min": 0, "max": 6 },
+    "scale": { "type": "float", "default": "1.0", "min": 0.2, "max": 4 },
+    "horizon": { "type": "float", "default": "0.5 + 0.03*beatPulse", "min": 0.2, "max": 0.8 },
+    "reflect": { "type": "float", "default": "0.35", "min": 0, "max": 1 }
+  }
+}

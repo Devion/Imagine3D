@@ -1,0 +1,11 @@
+{
+  "id": "radialwipe",
+  "name": "Radial wipe",
+  "kind": "transition",
+  "tags": ["wipe", "geometric", "retro"],
+  "energyRange": [0, 1],
+  "cost": "low",
+  "description": "Clock-hand sweep with a glowing leading edge.",
+  "shader": "shader.frag",
+  "params": {}
+}

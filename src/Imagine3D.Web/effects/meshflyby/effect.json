@@ -1,0 +1,21 @@
+{
+  "id": "meshflyby",
+  "name": "City flyby",
+  "kind": "scene3d",
+  "module": true,
+  "tags": ["city", "urban", "structure", "vast", "cinematic", "space", "scifi", "build"],
+  "energyRange": [0.25, 0.95],
+  "aspects": ["16:9", "9:16"],
+  "cost": "high",
+  "description": "Camera flight through a large model from the asset library — cityscapes, stations, terrain. Falls back to a procedural block city if the catalogue is empty.",
+  "params": {
+    "speed": { "type": "float", "default": "0.09 + 0.1*energy", "min": 0, "max": 1 },
+    "altitude": { "type": "float", "default": "0.75 - 0.12*beatPulse", "min": 0.02, "max": 3,
+                  "description": "Height as a fraction of the model's own height. ~1 skims the rooftops." },
+    "fov": { "type": "float", "default": "1.0 + 0.12*beatPulse", "min": 0.4, "max": 2.2 },
+    "radius": { "type": "float", "default": "0.35", "min": 0.02, "max": 1.5,
+                "description": "Orbit radius as a fraction of the model's footprint. Below ~0.5 flies inside it." },
+    "rim": { "type": "float", "default": "0.55 + 0.5*high", "min": 0, "max": 3 },
+    "wire": { "type": "float", "default": "0.0", "min": 0, "max": 1 }
+  }
+}

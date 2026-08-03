@@ -1,0 +1,11 @@
+{
+  "id": "dissolve",
+  "name": "Pixel dissolve",
+  "kind": "transition",
+  "tags": ["soft", "dissolve", "retro"],
+  "energyRange": [0, 1],
+  "cost": "low",
+  "description": "Blocky ordered dissolve - pixels flip over in hash order, the way an 8-bit wipe did it.",
+  "shader": "shader.frag",
+  "params": {}
+}

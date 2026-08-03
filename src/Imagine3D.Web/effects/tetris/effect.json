@@ -1,0 +1,18 @@
+{
+  "id": "tetris",
+  "name": "Tetromino fall",
+  "kind": "scene2d",
+  "tags": ["retro", "geometric", "mechanical", "structure", "showcase", "minimal"],
+  "energyRange": [0.15, 0.85],
+  "aspects": ["16:9", "9:16"],
+  "cost": "medium",
+  "description": "Beveled 3D-looking tetromino blocks tumbling down a well and stacking. Pieces spawn and rotate on the beat, and completed rows flash out.",
+  "shader": "shader.frag",
+  "params": {
+    "cell": { "type": "float", "default": "22.0", "min": 6, "max": 60,
+              "description": "Grid cells across the frame." },
+    "fall": { "type": "float", "default": "1.4 + 2.2*energy", "min": 0, "max": 8 },
+    "pieces": { "type": "float", "default": "7.0", "min": 1, "max": 14 },
+    "bevel": { "type": "float", "default": "0.16", "min": 0, "max": 0.45 }
+  }
+}

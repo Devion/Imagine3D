@@ -1,0 +1,16 @@
+{
+  "id": "glitch",
+  "name": "Glitch",
+  "kind": "post",
+  "tags": ["glitch", "sharp", "aggressive", "mechanical", "high-energy", "strobe"],
+  "energyRange": [0.55, 1.0],
+  "aspects": ["16:9", "9:16"],
+  "cost": "low",
+  "description": "Beat-gated slice displacement, block shuffling and channel tearing. Fires on transients rather than continuously, so it punctuates instead of smearing.",
+  "shader": "shader.frag",
+  "params": {
+    "amount": { "type": "float", "default": "0.25*beatPulse + 0.5*onset", "min": 0, "max": 1 },
+    "slices": { "type": "float", "default": "26.0", "min": 4, "max": 120 },
+    "blocks": { "type": "float", "default": "0.35", "min": 0, "max": 1 }
+  }
+}

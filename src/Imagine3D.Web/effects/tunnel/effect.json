@@ -1,0 +1,17 @@
+{
+  "id": "tunnel",
+  "name": "Texture tunnel",
+  "kind": "scene2d",
+  "tags": ["amiga", "retro", "psychedelic", "geometric", "space", "build", "tension"],
+  "energyRange": [0.25, 0.95],
+  "aspects": ["16:9", "9:16"],
+  "cost": "low",
+  "description": "The classic polar-mapped tunnel. Flight speed and twist track the music; the checker pattern flips on the bar.",
+  "shader": "shader.frag",
+  "params": {
+    "speed": { "type": "float", "default": "0.4 + 1.2*energy + 0.6*beatPulse", "min": 0, "max": 5 },
+    "twist": { "type": "float", "default": "0.15 + 0.5*mid", "min": -2, "max": 2 },
+    "rings": { "type": "float", "default": "8.0", "min": 2, "max": 32 },
+    "wobble": { "type": "float", "default": "0.12 + 0.25*bass", "min": 0, "max": 1 }
+  }
+}
