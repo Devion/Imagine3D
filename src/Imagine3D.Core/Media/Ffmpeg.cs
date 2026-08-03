@@ -60,6 +60,65 @@ public sealed partial class Ffmpeg
              $"-update 1 -frames:v 1 \"{outPng}\"");
     }
 
+    /// Write the first `seconds` of a video to a new file.
+    ///
+    /// Stream copy, so it is near-instant and lossless. Trimming from the start
+    /// means no keyframe hunting is needed - `-t` alone gives a clean cut, and
+    /// re-encoding a five-minute 1080p file to shorten it would be wasteful.
+    public void TrimCopy(string src, string dst, double seconds)
+    {
+        var t = seconds.ToString("0.###", CultureInfo.InvariantCulture);
+        Exec($"-y -hide_banner -loglevel error -i \"{src}\" -t {t} " +
+             $"-c copy -movflags +faststart \"{dst}\"");
+    }
+
+    /// Trim to `seconds` AND re-encode to land under `targetMb`.
+    ///
+    /// A stream copy inherits the source bitrate, so hitting a size target means
+    /// re-encoding. Two-pass is used rather than single-pass ABR because the
+    /// point of this is an upload limit: x264 given a full first-pass analysis
+    /// lands within a percent or two of the requested size, where single-pass
+    /// routinely overshoots on content whose complexity varies as much as a
+    /// demo's does.
+    ///
+    /// Returns the video bitrate it chose, in kbps.
+    public int TrimToSize(
+        string src, string dst, double seconds, double targetMb, int audioKbps = 192)
+    {
+        // MiB -> kbit/s. 1 MiB = 8388.608 kbit, and 3% is left for container
+        // overhead so the muxed result stays under the limit rather than on it.
+        double totalKbps = targetMb * 8388.608 / Math.Max(1.0, seconds);
+        int videoKbps = (int)Math.Floor(totalKbps * 0.97) - audioKbps;
+
+        if (videoKbps < 250)
+            throw new InvalidOperationException(
+                $"{targetMb:0.#} MB over {seconds:0}s leaves only {videoKbps} kbps for video. " +
+                "Shorten the clip or raise the size limit.");
+
+        var t = seconds.ToString("0.###", CultureInfo.InvariantCulture);
+        // Pass logs go to temp, not the working directory.
+        var passLog = Path.Combine(Path.GetTempPath(), $"i3d_2pass_{Guid.NewGuid():N}");
+        var common = $"-y -hide_banner -loglevel error -i \"{src}\" -t {t} " +
+                     $"-c:v libx264 -preset medium -b:v {videoKbps}k " +
+                     $"-passlogfile \"{passLog}\"";
+
+        try
+        {
+            // Pass 1 analyses only; its output is discarded.
+            Exec($"{common} -pass 1 -an -f mp4 NUL");
+            Exec($"{common} -pass 2 -c:a aac -b:a {audioKbps}k " +
+                 $"-pix_fmt yuv420p -movflags +faststart \"{dst}\"");
+        }
+        finally
+        {
+            foreach (var leftover in Directory.EnumerateFiles(
+                         Path.GetTempPath(), Path.GetFileName(passLog) + "*"))
+                try { File.Delete(leftover); } catch { /* best effort */ }
+        }
+
+        return videoKbps;
+    }
+
     /// Extract the audio window an LTX clip should be conditioned on.
     public void ExtractAudioSegment(string mp3, double start, double duration, string outWav)
     {

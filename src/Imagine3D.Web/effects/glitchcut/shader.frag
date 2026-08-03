@@ -30,8 +30,12 @@ void main() {
   float pick = step(hash12(vec2(slice, 7.0)), k);
   vec3 col = mix(a, b, pick);
 
-  // Blown-out scanlines through the worst of it.
-  col += chaos * 0.25 * step(0.7, hash12(vec2(slice, floor(k * 40.0))));
+  // Interference through the worst of it. A flat additive boost on random
+  // slices blew them to white and read as damage to the render rather than to
+  // the picture; modulating what is already there keeps the scenes visible.
+  float noise = hash12(vec2(slice, floor(k * 40.0)));
+  col *= 1.0 + chaos * 0.35 * (noise - 0.5);
+  col += vec3(0.5, 0.7, 1.0) * chaos * 0.10 * smoothstep(0.85, 1.0, noise);
 
   fragColor = vec4(col, 1.0);
 }

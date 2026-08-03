@@ -38,6 +38,40 @@ dotnet run --project src/Imagine3D.Tests        # DSP unit tests + analysis repo
 Every stage writes plain JSON to the project folder, so any of them can be
 inspected, hand-edited and re-run without redoing the others.
 
+To render an edited storyboard exactly as written — no director, no LLM:
+
+```
+POST /api/projects/<name>/generate   {"useExistingStoryboard": true}
+```
+
+Swap an `effectId`, change a parameter expression, delete a scene, retune a
+`blend`, then re-render. Without this the director would overwrite the edit on
+the way past.
+
+**Trimmed copy.** `saveTrimmedCopy` writes a shortened version alongside the full
+render — `song_16x9_4min.mp4` — for platforms with a length or size cap. The full
+render is always kept.
+
+`trimTargetMb` sets a size ceiling:
+
+- **0** — stream copy. Instant and lossless, but it inherits the source bitrate.
+- **>0** — two-pass re-encode at a bitrate computed from the ceiling and the
+  clip length, minus 3% for container overhead.
+
+Two-pass rather than single-pass ABR because the point is an upload limit: given
+a full first-pass analysis, x264 lands within a couple of percent, where
+single-pass overshoots on content whose complexity swings as much as a demo's.
+Measured on the 5:42 test song, 4 minutes at a 185 MB ceiling: **179.5 MB, 97% of
+the limit, 56 seconds to encode.**
+
+If the clip would already be under the ceiling, it falls back to the stream copy
+rather than re-encoding to reach a size it is already below. If the ceiling is
+too small to be reachable it says so and leaves the full render alone.
+
+```
+dotnet run --project src/Imagine3D.Tests -- --trim <video.mp4> [minutes] [targetMb]
+```
+
 ### How lyrics get their timing
 
 Whisper transcribes the song with word-level timestamps. On a dense mix that
@@ -67,6 +101,39 @@ the same as every line being frame-exact. Coverage is reported in the analysis
 panel, so the timing can be trusted on evidence rather than on faith. With no
 Whisper-capable Python present, it falls back to distributing lines across
 detected sections and says so.
+
+### Matching the music's energy
+
+`energyRange` in a manifest is a **hard gate**, not a preference. An effect that
+declares `[0.5, 1.0]` cannot be chosen for a section at energy 0.2 no matter how
+well its tags match — it was one weighted term among several, and a broadly
+tagged effect could out-argue it, which is how `lightning` ended up over a quiet
+passage. Only if nothing in the library covers an energy does the gate widen.
+
+Inside the band, being near its middle scores higher, and a *narrow* band scores
+higher than a wide one — declaring `[0.5, 0.7]` is a specific claim about where
+an effect belongs and is rewarded over `[0, 1]`.
+
+The post-processing stack scales with energy too, down to **nothing at all**
+below 0.24. That emptiness is deliberate: it is what gives the loud sections
+somewhere to arrive from.
+
+So tag `energyRange` honestly. It is the strongest signal in the system.
+
+### Iterating without rendering
+
+Choosing scenes takes under two seconds; rendering them takes minutes. Three
+buttons, and the equivalent API calls:
+
+| Button | Body | What runs |
+|---|---|---|
+| **Redo storyboard** | `{"planOnly": true}` | analyse → intent → director, writes `storyboard.json`, stops |
+| **Render this storyboard** | `{"useExistingStoryboard": true}` | renders the file on disk verbatim |
+| **Generate video** | `{}` | the whole chain |
+
+*Reroll* bumps the seed and re-plans immediately, so a new seed has a visible
+consequence. The normal loop is: reroll or re-plan until the scene list reads
+well, then render once.
 
 ### Cuts and blends
 
@@ -181,6 +248,13 @@ here before being caught by the contact sheet:
   `tanh` it — a `col/(1+col)` on an already-huge sum just clips to white.
 - *Powers on noise.* fBm sits near 0.5, so `pow(n, 6.0)` is 0.015 and forty steps
   of it is invisible. Check what your shaping function does to the value range.
+- *Hard-edged full-width bands.* Anything that draws a stripe across the whole
+  frame — a raster bar, a scanline artefact — has to be anti-aliased in **pixel**
+  units (`1.5 / uResolution.y`), not as a fraction of the band, and should fall
+  off toward its own edges so it doesn't meet the background as a contrast step.
+  Never invert or blow out a row outright: modulate what is already there.
+  Both effects that got this wrong looked like damage to the render rather than
+  to the picture.
 
 ### Seeing what you made
 
@@ -243,10 +317,10 @@ pending your call on whether you want that licence attached to the output.
   reported in the UI. A cleaner vocal will anchor far more. `whisperModel` in
   `project.json` trades speed for anchors (`medium` is the default and the best
   balance measured here); `lyricAlignment` can force or disable it.
-- **The LTX stage is implemented but has not been run end-to-end** — it needs
-  ComfyUI up with a real `LTX2_I2V.json` API-format graph (see
-  `workflows/README.md` in Mp3ToVid for how that file has to be exported).
-  Everything else in the pipeline has been verified on a full song.
+- **LTX inserts are verified end-to-end.** The app launches ComfyUI if it is not
+  already up (~35s), renders a frame of the demo as the init image, generates the
+  clip and blends it in. Clips are cached by prompt hash, so a re-render never
+  regenerates them.
 - Seeded from `project.json`: the same project always renders the same video.
   *Reroll* bumps the seed deliberately.
 

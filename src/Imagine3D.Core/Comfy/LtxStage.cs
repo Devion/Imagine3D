@@ -74,19 +74,23 @@ public sealed class LtxStage(
                     $"clip {i + 1}/{picks.Count} - {Trunc(prompt, 70)}"));
 
                 var init = await MakeInitImageAsync(comfy, paths, settings, start, lw, lh, prompt, i, ct);
-                var audio = Path.Combine(paths.CacheDir, $"ltx_audio_{i + 1:D3}.wav");
-                ffmpeg.ExtractAudioSegment(paths.FindMp3()!, start, settings.Ltx.ClipSeconds, audio);
 
+                // Token names match the working graph exactly: it takes a
+                // %DURATION% in *seconds* and derives the frame count itself, and
+                // it has no audio input - LTX synthesises its own, which we
+                // discard because the original MP3 is muxed over everything.
                 var produced = await comfy.RunAsync("LTX2_I2V.json", new Dictionary<string, object>
                 {
                     ["%IMAGE%"] = comfy.StageInput(init),
-                    ["%AUDIO%"] = comfy.StageInput(audio),
                     ["%PROMPT%"] = prompt,
                     ["%NEGATIVE%"] = SongText.ComposeNegative(song.Negative, "text, watermark, blurry"),
                     ["%WIDTH%"] = lw,
                     ["%HEIGHT%"] = lh,
-                    ["%FRAMES%"] = (int)(settings.Ltx.ClipSeconds * settings.Fps),
+                    ["%DURATION%"] = (int)Math.Round(settings.Ltx.ClipSeconds),
                     ["%FPS%"] = settings.Fps,
+                    // The graph's Gemma prompt rewriter. Off: it paraphrases each
+                    // clip independently and breaks look continuity.
+                    ["%ENHANCE%"] = settings.Ltx.PromptEnhance,
                     ["%SEED%"] = settings.Seed + i,
                     ["%OUTPUT_PREFIX%"] = $"i3d_{paths.Name}_{i + 1:D3}",
                 }, isVideo: true, ct);
@@ -123,9 +127,12 @@ public sealed class LtxStage(
 
         if (settings.Ltx.InitMode == "render" && snapshot is not null)
         {
+            // ffmpeg cannot read and write the same path in one invocation, so
+            // the snapshot lands in its own file and is fitted into the final one.
+            var raw = Path.Combine(paths.KeyframeDir, $"init_{index + 1:D3}_raw.png");
             var png = await snapshot(t, w, h, ct);
-            await File.WriteAllBytesAsync(initPath, png, ct);
-            ffmpeg.FitImage(initPath, initPath, w, h);
+            await File.WriteAllBytesAsync(raw, png, ct);
+            ffmpeg.FitImage(raw, initPath, w, h);
             return initPath;
         }
 

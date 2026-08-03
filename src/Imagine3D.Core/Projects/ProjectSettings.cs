@@ -25,6 +25,17 @@ public sealed class ProjectSettings
     /// Render at N x the output size then downscale - crisper demoscene look.
     public int Supersample { get; set; } = 1;
 
+    /// Also write a shortened copy of the finished video alongside the full one,
+    /// for platforms with a length cap. The full render is never replaced.
+    public bool SaveTrimmedCopy { get; set; }
+
+    /// Length of that copy, in minutes.
+    public double TrimMinutes { get; set; } = 4;
+
+    /// Size ceiling for the copy, in MB. 0 keeps the fast lossless stream copy;
+    /// anything above re-encodes two-pass to land under the limit.
+    public double TrimTargetMb { get; set; }
+
     /// Beat tracking on rubato material is unreliable; these let the user pin it.
     public double? BpmOverride { get; set; }
     public double? DownbeatOffsetOverride { get; set; }
@@ -73,6 +84,8 @@ public sealed class ProjectSettings
         Fps = Math.Clamp(Fps, 12, 60);
         Crf = Math.Clamp(Crf, 0, 51);
         Supersample = Math.Clamp(Supersample, 1, 4);
+        TrimMinutes = Math.Clamp(TrimMinutes, 0.25, 60);
+        TrimTargetMb = TrimTargetMb <= 0 ? 0 : Math.Clamp(TrimTargetMb, 5, 4000);
         if (Seed == 0) Seed = 1;
         var (w, h) = Resolution;
         Width = Even(w);
@@ -90,6 +103,10 @@ public sealed class LtxSettings
     /// clip flows out of the demo instead of cutting to unrelated imagery.
     /// "sdxl" generates a fresh key frame instead.
     public string InitMode { get; set; } = "render";
+
+    /// The graph's Gemma prompt rewriter. Off by default: it paraphrases every
+    /// clip independently, which is what breaks look continuity between them.
+    public bool PromptEnhance { get; set; }
 
     public string ComfyUrl { get; set; } = "http://127.0.0.1:8188";
     public string ComfyRoot { get; set; } = @"D:\AI\ComfyUI\ComfyUI";

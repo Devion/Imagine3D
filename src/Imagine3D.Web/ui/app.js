@@ -110,7 +110,7 @@ function onStageProgress(p) {
 
 async function finishRun(p) {
   state.running = false;
-  $('btn-generate').disabled = false;
+  setRunButtons(true);
   $('btn-cancel').classList.add('hidden');
 
   if (p.failed) {
@@ -190,7 +190,7 @@ async function refreshProject() {
     : '<div class="muted">No MP3 imported yet.</div>';
 
   $('btn-analyze').disabled = !d.mp3;
-  $('btn-generate').disabled = !d.hasAnalysis || state.running;
+  setRunButtons(!state.running);
 }
 
 function applySettings(s) {
@@ -202,10 +202,14 @@ function applySettings(s) {
   $('crf-out').textContent = String(s.crf);
   $('supersample').value = String(s.supersample);
   $('seed').value = String(s.seed);
+  $('trim-enabled').checked = !!s.saveTrimmedCopy;
+  $('trim-minutes').value = String(s.trimMinutes ?? 4);
+  $('trim-mb').value = String(s.trimTargetMb ?? 0);
   $('bpm-override').value = s.bpmOverride ?? '';
   $('ltx-enabled').checked = !!s.ltx?.enabled;
   $('ltx-count').value = String(s.ltx?.maxInserts ?? 6);
   $('ltx-init').value = s.ltx?.initMode ?? 'render';
+  $('ltx-enhance').checked = !!s.ltx?.promptEnhance;
 }
 
 function collectSettings() {
@@ -218,13 +222,19 @@ function collectSettings() {
     crf: parseInt($('crf').value, 10),
     supersample: parseInt($('supersample').value, 10),
     seed: Math.max(1, parseInt($('seed').value, 10) || 1),
+    saveTrimmedCopy: $('trim-enabled').checked,
+    trimMinutes: Math.max(0.25, parseFloat($('trim-minutes').value) || 4),
+    trimTargetMb: Math.max(0, parseFloat($('trim-mb').value) || 0),
     bpmOverride: Number.isFinite(bpm) && bpm > 0 ? bpm : null,
     downbeatOffsetOverride: null,
+    lyricAlignment: state.detail?.settings?.lyricAlignment ?? 'auto',
+    whisperModel: state.detail?.settings?.whisperModel ?? 'medium',
     ltx: {
       enabled: $('ltx-enabled').checked,
       maxInserts: Math.max(1, parseInt($('ltx-count').value, 10) || 6),
       clipSeconds: 5,
       initMode: $('ltx-init').value,
+      promptEnhance: $('ltx-enhance').checked,
       comfyUrl: state.detail?.settings?.ltx?.comfyUrl ?? 'http://127.0.0.1:8188',
       comfyRoot: state.detail?.settings?.ltx?.comfyRoot ?? 'D:\\AI\\ComfyUI\\ComfyUI',
     },
@@ -252,7 +262,7 @@ async function loadAnalysis() {
     const a = await api(`api/projects/${encodeURIComponent(state.project)}/analysis`);
     state.analysis = a;
     renderAnalysis(a);
-    $('btn-generate').disabled = state.running;
+    setRunButtons(!state.running);
   } catch {
     state.analysis = null;
     $('analysis-panel').classList.add('hidden');
@@ -451,35 +461,59 @@ $('btn-analyze').addEventListener('click', async () => {
   }
 });
 
-$('btn-generate').addEventListener('click', async () => {
+/// Shared launcher for every kind of run; `body` decides which stages happen.
+async function startRun(body) {
   resetStages();
   state.running = true;
-  $('btn-generate').disabled = true;
+  setRunButtons(false);
   $('btn-cancel').classList.remove('hidden');
   try {
     await api(`api/projects/${encodeURIComponent(state.project)}/settings`,
       { method: 'PUT', body: JSON.stringify(collectSettings()) });
-    await api(`api/projects/${encodeURIComponent(state.project)}/generate`, {
-      method: 'POST',
-      body: JSON.stringify({
-        useLlm: $('use-llm').checked,
-        generateLtx: $('ltx-enabled').checked,
-        force: false,
-      }),
-    });
+    await api(`api/projects/${encodeURIComponent(state.project)}/generate`,
+      { method: 'POST', body: JSON.stringify(body) });
   } catch (e) {
     state.running = false;
-    $('btn-generate').disabled = false;
+    setRunButtons(true);
     $('btn-cancel').classList.add('hidden');
     showWarnings([e.message], true);
   }
-});
+}
+
+function setRunButtons(enabled) {
+  const hasAnalysis = !!state.analysis;
+  const hasStoryboard = !!state.storyboard;
+  $('btn-generate').disabled = !enabled || !hasAnalysis;
+  $('btn-plan').disabled = !enabled || !hasAnalysis;
+  $('btn-render-existing').disabled = !enabled || !hasStoryboard;
+  $('btn-analyze').disabled = !enabled;
+}
+
+$('btn-generate').addEventListener('click', () => startRun({
+  useLlm: $('use-llm').checked,
+  generateLtx: $('ltx-enabled').checked,
+  force: false,
+}));
+
+// Re-plan only: the director runs again and writes storyboard.json, nothing is
+// rendered. Seconds rather than minutes, which makes rerolling actually usable.
+$('btn-plan').addEventListener('click', () => startRun({
+  useLlm: $('use-llm').checked,
+  planOnly: true,
+}));
+
+$('btn-render-existing').addEventListener('click', () => startRun({
+  useExistingStoryboard: true,
+}));
 
 $('btn-cancel').addEventListener('click', () => api('api/cancel', { method: 'POST' }));
 
 $('btn-reroll').addEventListener('click', () => {
   $('seed').value = String(Math.floor(Math.random() * 100000) + 1);
-  saveSettingsSoon();
+  // Re-plan straight away: a new seed with no visible consequence is a
+  // button that appears to do nothing.
+  if (state.analysis) startRun({ useLlm: $('use-llm').checked, planOnly: true });
+  else saveSettingsSoon();
 });
 
 $('crf').addEventListener('input', () => { $('crf-out').textContent = $('crf').value; });
@@ -493,7 +527,8 @@ for (const b of document.querySelectorAll('#aspect button')) {
 }
 
 for (const id of ['fps', 'encoder', 'crf', 'supersample', 'seed', 'bpm-override',
-                  'ltx-enabled', 'ltx-count', 'ltx-init']) {
+                  'trim-enabled', 'trim-minutes', 'trim-mb',
+                  'ltx-enabled', 'ltx-count', 'ltx-init', 'ltx-enhance']) {
   $(id).addEventListener('change', saveSettingsSoon);
 }
 

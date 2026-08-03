@@ -2,11 +2,18 @@
   "profiles": {
     "Imagine3D.App": {
       "commandName": "Project",
-      "launchBrowser": true,
+      "launchBrowser": false,
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
-      },
-      "applicationUrl": "https://localhost:59625;http://localhost:59626"
+      }
+    },
+    "Imagine3D.App (headless)": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "commandLineArgs": "--serve",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
     }
   }
 }

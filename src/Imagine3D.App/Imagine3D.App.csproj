@@ -11,6 +11,15 @@
     <!-- Photino ships native bits per-RID; pin so the loader finds them. -->
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
+
+    <!-- The Web SDK treats anything linked under wwwroot as "static web assets"
+         and, in Development, builds file providers from a generated manifest.
+         That manifest names <project>/wwwroot, which this project never has -
+         the web assets live in ../Imagine3D.Web and are served through an
+         explicit provider. Under `dotnet run` (which sets Development) the
+         manifest loader threw DirectoryNotFoundException before any of our code
+         ran. Nothing here uses the feature, so it is off. -->
+    <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
   </PropertyGroup>
 
   <ItemGroup>

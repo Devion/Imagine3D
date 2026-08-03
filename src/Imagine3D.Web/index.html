@@ -88,6 +88,20 @@
               <button id="btn-reroll" class="ghost" title="New seed — different scene choices">Reroll</button>
             </div>
           </label>
+          <label class="check">
+            <input id="trim-enabled" type="checkbox">
+            <span>Also save a shortened copy</span>
+          </label>
+          <label class="field"><span>Length (min)</span>
+            <input id="trim-minutes" type="number" min="0.25" max="60" step="0.5" value="4">
+          </label>
+          <label class="field"><span>Max size (MB)</span>
+            <input id="trim-mb" type="number" min="0" max="4000" step="5" value="0" placeholder="0 = no limit">
+          </label>
+          <p class="hint">Written next to the full render as
+             <code>…_4min.mp4</code>; the full version is always kept. With no
+             size limit it is a stream copy and costs nothing. Set a limit and it
+             re-encodes two-pass to land under it — a few minutes of CPU.</p>
         </div>
 
         <div class="panel">
@@ -115,6 +129,10 @@
               <option value="sdxl">Fresh SDXL keyframe</option>
             </select>
           </label>
+          <label class="check">
+            <input id="ltx-enhance" type="checkbox">
+            <span>LTX prompt rewriter</span>
+          </label>
           <p class="hint">Requires ComfyUI with LTX. Clips are cached, so a
              re-render never regenerates them.</p>
         </div>
@@ -123,7 +141,11 @@
       <div class="content">
         <div class="actions">
           <button id="btn-analyze" class="primary">Analyse audio</button>
+          <button id="btn-plan" class="primary" disabled
+                  title="Choose scenes and effects again without rendering — seconds instead of minutes">Redo storyboard</button>
           <button id="btn-generate" class="primary accent" disabled>Generate video</button>
+          <button id="btn-render-existing" class="ghost" disabled
+                  title="Render plan/storyboard.json exactly as it is on disk">Render this storyboard</button>
           <button id="btn-cancel" class="ghost hidden">Cancel</button>
           <label class="check inline">
             <input id="use-llm" type="checkbox" checked>

@@ -55,6 +55,19 @@ public sealed class ProjectPaths(string root)
         return Path.Combine(OutputDir, $"{Sanitize(stem)}_{tag}.mp4");
     }
 
+    /// The shortened copy, named with its length so the two never get confused.
+    public string OutputVideoTrimmed(ProjectSettings s)
+    {
+        var full = OutputVideo(s);
+        var minutes = s.TrimMinutes;
+        // "4min" reads better than "4.0min" for the common whole-minute case.
+        var label = Math.Abs(minutes - Math.Round(minutes)) < 0.01
+            ? $"{minutes:0}min"
+            : $"{minutes:0.##}min".Replace('.', '_');
+        return Path.Combine(OutputDir,
+            $"{Path.GetFileNameWithoutExtension(full)}_{label}.mp4");
+    }
+
     static string? FirstOrNull(string dir, string pattern) =>
         Directory.Exists(dir) ? Directory.EnumerateFiles(dir, pattern).FirstOrDefault() : null;
 

@@ -23,4 +23,13 @@ public sealed record StageProgress(
 public sealed record PipelineOptions(
     bool UseLlm = true,
     bool GenerateLtx = false,
-    bool Force = false);
+    bool Force = false,
+    /// Render plan/storyboard.json exactly as it is on disk, skipping the intent
+    /// and director stages. This is what makes the storyboard editable: change an
+    /// effect id or a parameter expression by hand and render that, rather than
+    /// having the director immediately overwrite your edit.
+    bool UseExistingStoryboard = false,
+    /// Stop after writing plan/storyboard.json. Choosing scenes takes a second;
+    /// rendering them takes minutes, so this is the loop for iterating on the
+    /// director's decisions.
+    bool PlanOnly = false);

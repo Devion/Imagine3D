@@ -10,10 +10,12 @@
 
 float gWormhole, gCount, gRadius, gSpin, gSpeed;
 
-const float RING_PITCH = 1.15;   // spacing between rings down the tunnel
+const float RING_PITCH = 1.9;    // spacing between rings down the tunnel
 
 float map(vec3 p) {
-  // Coordinate that travels down the tunnel with time.
+  // Coordinate that travels down the tunnel with time. Only ever used to decide
+  // *which* ring copy a point falls in - never to size or twist anything, see
+  // below.
   float travel = p.z + gSpeed * uTime;
 
   // Which copy of the ring this point belongs to, and how far it sits from it.
@@ -22,13 +24,19 @@ float map(vec3 p) {
   float zRepeat = mod(travel + RING_PITCH * 0.5, RING_PITCH) - RING_PITCH * 0.5;
   float dz = mix(p.z, zRepeat, gWormhole);
 
-  // Ring radius narrows with depth once it is a funnel. Measured from the
-  // *repeated* coordinate so every ring in the tunnel gets its own radius.
-  float depth = mix(0.0, abs(travel), gWormhole);
+  // Ring radius narrows with distance AHEAD OF THE CAMERA.
+  //
+  // This used to narrow with `travel`, which carries the elapsed-time term - so
+  // the funnel kept shrinking for as long as the scene ran and collapsed to a
+  // pinhole after half a minute, with everything appearing to rush past it. The
+  // geometry has to be a function of position, not of how long we have been
+  // looking at it.
+  float depth = mix(0.0, max(0.0, p.z), gWormhole);
   float ring = mix(0.85, 0.85 / (1.0 + depth * 0.16), gWormhole);
 
-  // Twist grows with depth so the funnel corkscrews.
-  float twist = gSpin * uTime + travel * gWormhole * 0.35;
+  // Corkscrew with depth, plus a steady rotation. Again p.z, not travel: using
+  // travel made the twist rate accelerate the longer the scene ran.
+  float twist = gSpin * uTime + p.z * gWormhole * 0.35;
 
   float a = atan(p.y, p.x) + twist;
   float r = length(p.xy);
@@ -42,8 +50,14 @@ float map(vec3 p) {
   float orb = length(vec3(q.x - ring, q.y, dz)) - gRadius;
 
   // A faint spine down the middle gives the wormhole a centre to read against.
-  // Pushed far away in ring mode so it contributes nothing there.
-  float spine = (length(p.xy) - 0.035) + (1.0 - gWormhole) * 20.0;
+  //
+  // It must exist only *ahead* of the camera. The camera flies down the axis, so
+  // an unbounded rod puts it permanently inside the geometry: map() returns a
+  // negative value at the very first step, the march terminates immediately and
+  // the whole frame collapses to fog. Intersecting with the z > 0 half-space
+  // keeps it in front where it belongs.
+  float spine = max(length(p.xy) - 0.035, -p.z + 0.4);
+  spine += (1.0 - gWormhole) * 20.0;   // absent in ring mode
 
   return min(orb, spine);
 }
@@ -58,7 +72,11 @@ void main() {
   vec2 uv = centered(vUv, uAspect);
 
   // Pull the camera back for the ring, push it inside for the wormhole.
-  float dist = mix(3.2, 1.1, gWormhole);
+  //
+  // The range is deliberately modest. A 3.2 -> 1.1 dolly is a 3x zoom, and
+  // because it happens over the same window as the shape morph the middle of
+  // every scene turned into the most violent part of it by a wide margin.
+  float dist = mix(3.0, 1.6, gWormhole);
   vec3 ro = vec3(0.0, 0.0, -dist);
   vec3 rd = normalize(vec3(uv, 1.4));
 

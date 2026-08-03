@@ -95,11 +95,69 @@ public sealed class RenderService(Ffmpeg ffmpeg)
         var result = await pipe.FinishAsync();
 
         var size = new FileInfo(result).Length / (1024.0 * 1024.0);
-        progress.Report(new StageProgress(PipelineStage.Encode, 1.0,
-            $"{Path.GetFileName(result)} - {size:F1} MB in {Format(sw.Elapsed)}"));
+        var detail = $"{Path.GetFileName(result)} - {size:F1} MB in {Format(sw.Elapsed)}";
+
+        // Optional shortened copy alongside the full render.
+        if (settings.SaveTrimmedCopy)
+            detail += WriteTrimmedCopy(result, paths, settings, storyboard.Duration, progress);
+
+        progress.Report(new StageProgress(PipelineStage.Encode, 1.0, detail));
 
         return result;
     }
+
+    /// The shortened upload copy. Returns a fragment for the progress line.
+    string WriteTrimmedCopy(
+        string source, ProjectPaths paths, ProjectSettings settings,
+        double duration, IProgress<StageProgress> progress)
+    {
+        double limit = settings.TrimMinutes * 60;
+        double clipSeconds = Math.Min(duration, limit);
+        bool needsTrim = duration > limit + 0.5;
+
+        var target = settings.TrimTargetMb;
+        var trimmed = paths.OutputVideoTrimmed(settings);
+
+        // Nothing to do: short enough already and no size ceiling asked for.
+        if (!needsTrim && target <= 0)
+            return $"  (already under {settings.TrimMinutes:0.##} min, no copy needed)";
+
+        // A stream copy is instant and lossless, so use it whenever the result
+        // would already sit under the ceiling - re-encoding to reach a size you
+        // are already below only loses quality.
+        long fullBytes = new FileInfo(source).Length;
+        double copyMb = fullBytes / (1024.0 * 1024.0) * (clipSeconds / Math.Max(0.001, duration));
+
+        if (target <= 0 || copyMb <= target)
+        {
+            if (!needsTrim) return $"  (already under {settings.TrimMinutes:0.##} min and {target:0} MB)";
+            progress.Report(new StageProgress(PipelineStage.Encode, 0.9,
+                $"Copying a {settings.TrimMinutes:0.##} minute cut"));
+            ffmpeg.TrimCopy(source, trimmed, clipSeconds);
+            return $"  (+ {Path.GetFileName(trimmed)}, {Mb(trimmed):F0} MB, stream copy)";
+        }
+
+        progress.Report(new StageProgress(PipelineStage.Encode, 0.9,
+            $"Re-encoding a {settings.TrimMinutes:0.##} minute copy to fit {target:0} MB " +
+            $"(two-pass, ~{clipSeconds / 60:0.#} min of video)"));
+
+        try
+        {
+            int kbps = ffmpeg.TrimToSize(source, trimmed, clipSeconds, target);
+            double actual = Mb(trimmed);
+            var verdict = actual <= target ? "" : $" - OVER by {actual - target:F0} MB";
+            return $"  (+ {Path.GetFileName(trimmed)}, {actual:F0} MB at {kbps} kbps{verdict})";
+        }
+        catch (Exception e)
+        {
+            // The copy is a convenience; losing it must not fail a finished render.
+            progress.Report(new StageProgress(PipelineStage.Encode, 0.95,
+                $"Trimmed copy failed: {e.Message}"));
+            return $"  (trimmed copy failed: {Trunc(e.Message, 70)})";
+        }
+    }
+
+    static double Mb(string path) => new FileInfo(path).Length / (1024.0 * 1024.0);
 
     static string? ExtractThumb(string text)
     {

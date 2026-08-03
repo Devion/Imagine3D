@@ -16,11 +16,13 @@ using Photino.NET;
 // an ordinary browser with devtools - the only practical way to debug WebGL.
 bool headless = args.Contains("--serve");
 
-var builder = WebApplication.CreateBuilder(new WebApplicationOptions
-{
-    Args = args,
-    WebRootPath = AppPaths.WebRoot,
-});
+AppPaths.ValidateWebRoot();
+
+// WebRootPath is deliberately not set: when it points outside the content root
+// the framework can still fall back to <contentroot>/wwwroot and throw on a
+// directory that was never meant to exist. The web assets are served through an
+// explicit file provider below instead, the same way /media and /assets are.
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = args });
 
 builder.Logging.ClearProviders();
 builder.Logging.AddSimpleConsole(o => o.SingleLine = true);
@@ -50,9 +52,12 @@ builder.Services.AddSingleton<GenerationPipeline>();
 var app = builder.Build();
 
 app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(30) });
-app.UseDefaultFiles();
+var webFiles = new PhysicalFileProvider(AppPaths.WebRoot);
+
+app.UseDefaultFiles(new DefaultFilesOptions { FileProvider = webFiles });
 app.UseStaticFiles(new StaticFileOptions
 {
+    FileProvider = webFiles,
     ServeUnknownFileTypes = true,
     // When the web root is the source tree, this is a live-editing session:
     // caching an engine module or shader means an edit silently does nothing
@@ -173,6 +178,9 @@ app.MapPut("/api/projects/{name}/settings", (ProjectStore store, string name, Pr
     current.Encoder = incoming.Encoder;
     current.Crf = incoming.Crf;
     current.Supersample = incoming.Supersample;
+    current.SaveTrimmedCopy = incoming.SaveTrimmedCopy;
+    current.TrimMinutes = incoming.TrimMinutes;
+    current.TrimTargetMb = incoming.TrimTargetMb;
     current.BpmOverride = incoming.BpmOverride;
     current.DownbeatOffsetOverride = incoming.DownbeatOffsetOverride;
     current.LyricAlignment = incoming.LyricAlignment;
@@ -255,7 +263,8 @@ app.MapPost("/api/projects/{name}/generate",
         try
         {
             await pipeline.RunAsync(name,
-                new PipelineOptions(req.UseLlm, req.GenerateLtx, req.Force), progress, cts.Token);
+                new PipelineOptions(req.UseLlm, req.GenerateLtx, req.Force, req.UseExistingStoryboard, req.PlanOnly),
+                progress, cts.Token);
         }
         catch (OperationCanceledException)
         {
@@ -445,4 +454,9 @@ void RunWindow()
 record ClientLog(string Level, string Message, string? Stack);
 record CreateRequest(string Name);
 record ImportRequest(string Path);
-record GenerateRequest(bool UseLlm = true, bool GenerateLtx = false, bool Force = false);
+record GenerateRequest(
+    bool UseLlm = true,
+    bool GenerateLtx = false,
+    bool Force = false,
+    bool UseExistingStoryboard = false,
+    bool PlanOnly = false);

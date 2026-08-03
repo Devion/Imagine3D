@@ -29,6 +29,30 @@ public sealed class GenerationPipeline(
         var analysis = await Task.Run(() =>
             LoadOrAnalyze(paths, settings, options.Force, progress), ct);
 
+        // Re-render an edited storyboard verbatim: no intent, no director.
+        if (options.UseExistingStoryboard)
+        {
+            if (!File.Exists(paths.StoryboardFile))
+                throw new InvalidOperationException(
+                    "No storyboard on disk to re-render. Generate one first.");
+
+            var existing = JsonSerializer.Deserialize<Storyboard>(
+                               File.ReadAllText(paths.StoryboardFile), Json.Options)
+                           ?? throw new InvalidOperationException("storyboard.json could not be read.");
+
+            progress.Report(new StageProgress(PipelineStage.Intent, 1.0, "Skipped - using the storyboard on disk"));
+            progress.Report(new StageProgress(PipelineStage.Storyboard, 1.0,
+                $"Reusing {existing.Scenes.Length} scenes from plan/storyboard.json"));
+            progress.Report(new StageProgress(PipelineStage.Ltx, 1.0, "Skipped"));
+
+            var channelOnly = session.Channel
+                ?? throw new InvalidOperationException("The render page is not connected.");
+            var reRendered = await new RenderService(ffmpeg)
+                .RenderAsync(channelOnly, paths, settings, existing, progress, ct);
+            progress.Report(new StageProgress(PipelineStage.Done, 1.0, reRendered));
+            return reRendered;
+        }
+
         // 2. Intent ------------------------------------------------------------
         Intent? intent = null;
         if (options.UseLlm)
@@ -61,6 +85,14 @@ public sealed class GenerationPipeline(
             $"{storyboard.Scenes.Length} scenes, " +
             $"{storyboard.Scenes.Sum(s => s.Post.Length)} post effects, " +
             $"{storyboard.Texts.Length} text cues"));
+
+        if (options.PlanOnly)
+        {
+            progress.Report(new StageProgress(PipelineStage.Ltx, 1.0, "Skipped"));
+            progress.Report(new StageProgress(PipelineStage.Done, 1.0,
+                $"Storyboard only - {storyboard.Scenes.Length} scenes planned, nothing rendered"));
+            return paths.StoryboardFile;
+        }
 
         // 4. LTX ---------------------------------------------------------------
         if (options.GenerateLtx && settings.Ltx.Enabled)

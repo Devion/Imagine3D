@@ -19,19 +19,40 @@ public static class AppPaths
 
     static string ResolveWebRoot()
     {
-        // Walk up from bin/Debug/net10.0/win-x64 looking for the source web project.
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        for (int i = 0; i < 8 && dir is not null; i++, dir = dir.Parent)
+        // Walk up from both the binary's location and the working directory:
+        // `dotnet run` and Visual Studio start with the working directory set to
+        // the project folder, which is a different tree from bin/.
+        foreach (var start in new[] { AppContext.BaseDirectory, Directory.GetCurrentDirectory() })
         {
-            var candidate = Path.Combine(dir.FullName, "src", "Imagine3D.Web");
-            if (File.Exists(Path.Combine(candidate, "index.html")))
+            var dir = new DirectoryInfo(start);
+            for (int i = 0; i < 8 && dir is not null; i++, dir = dir.Parent)
             {
-                ServingFromSource = true;
-                return candidate;
+                var candidate = Path.Combine(dir.FullName, "src", "Imagine3D.Web");
+                if (File.Exists(Path.Combine(candidate, "index.html")))
+                {
+                    ServingFromSource = true;
+                    return candidate;
+                }
             }
         }
 
+        // Published layout: the web assets were copied next to the executable.
         return Path.Combine(AppContext.BaseDirectory, "wwwroot");
+    }
+
+    /// Fail with something actionable rather than a bare DirectoryNotFoundException
+    /// from deep inside the static-file middleware.
+    public static void ValidateWebRoot()
+    {
+        if (Directory.Exists(WebRoot) && File.Exists(Path.Combine(WebRoot, "index.html")))
+            return;
+
+        throw new DirectoryNotFoundException(
+            $"Web assets not found at {WebRoot}.\n" +
+            "Expected src/Imagine3D.Web/index.html somewhere above the executable or the " +
+            "working directory, or a wwwroot next to the executable in a published build.\n" +
+            $"  executable : {AppContext.BaseDirectory}\n" +
+            $"  working dir: {Directory.GetCurrentDirectory()}");
     }
 
     static string ResolveWorkflows()

@@ -145,10 +145,26 @@ public sealed class Director(EffectRegistry registry)
         List<EffectManifest> candidates, string[] tags, double energy,
         List<string> recent, Random rng)
     {
-        var scored = candidates.Select(e => (Effect: e, Score: Score(e, tags, energy, recent, rng)))
+        // Energy is a hard gate, not a preference.
+        //
+        // It used to be one term among several, and a well-tagged effect could
+        // out-argue it: `lightning` (declared [0.5, 1.0]) would win a section at
+        // energy 0.2 on tag overlap alone, which is exactly as wrong as it
+        // sounds. A quiet passage now can only be given something that says it
+        // suits a quiet passage.
+        var eligible = candidates.Where(e => e.FitsEnergy(energy)).ToList();
+
+        // Widen only if nothing at all is declared for this energy, so a library
+        // with a gap still produces a video rather than throwing.
+        if (eligible.Count == 0)
+            eligible = candidates.Where(e => e.FitsEnergy(energy, 0.3)).ToList();
+        if (eligible.Count == 0)
+            eligible = candidates.OrderBy(e => e.EnergyMiss(energy)).Take(4).ToList();
+
+        return eligible
+            .Select(e => (Effect: e, Score: Score(e, tags, energy, recent, rng)))
             .OrderByDescending(x => x.Score)
-            .ToList();
-        return scored[0].Effect;
+            .First().Effect;
     }
 
     double Score(EffectManifest e, string[] tags, double energy, List<string> recent, Random rng)
@@ -162,11 +178,25 @@ public sealed class Director(EffectRegistry registry)
         int overlap = e.Tags.Count(t => tags.Contains(t, StringComparer.OrdinalIgnoreCase));
         score += overlap * 2.0 / Math.Sqrt(Math.Max(1, e.Tags.Length));
 
-        // Energy fit: how close the section sits to the middle of the effect's band.
-        double lo = e.EnergyRange.Length > 0 ? e.EnergyRange[0] : 0;
-        double hi = e.EnergyRange.Length > 1 ? e.EnergyRange[1] : 1;
-        if (energy < lo || energy > hi) score -= 2.5 * Math.Min(Math.Abs(energy - lo), Math.Abs(energy - hi));
-        else score += 1.5 * (1 - Math.Abs(energy - (lo + hi) / 2) / Math.Max(0.01, (hi - lo) / 2));
+        // Energy fit. Outside the declared band the penalty is steep enough that
+        // no amount of tag agreement rescues it; inside, being near the middle of
+        // the band is rewarded, so a section at 0.9 prefers something built for
+        // 0.9 over something merely tolerant of it.
+        double miss = e.EnergyMiss(energy);
+        if (miss > 0)
+        {
+            score -= 12.0 * miss;
+        }
+        else
+        {
+            double mid = (e.EnergyLo + e.EnergyHi) / 2;
+            double halfWidth = Math.Max(0.01, (e.EnergyHi - e.EnergyLo) / 2);
+            score += 2.5 * (1 - Math.Abs(energy - mid) / halfWidth);
+
+            // A narrow band is a specific claim about where an effect belongs;
+            // reward that over an effect declaring it suits almost anything.
+            score += 1.2 * (1.0 - (e.EnergyHi - e.EnergyLo));
+        }
 
         // Repetition: a scene used recently is heavily penalised, decaying with age.
         int since = recent.Count - 1 - recent.LastIndexOf(e.Id);
@@ -175,9 +205,9 @@ public sealed class Director(EffectRegistry registry)
 
         score -= 0.25 * e.CostWeight;
 
-        // Seeded jitter breaks ties and keeps consecutive songs from looking
-        // identical, without making the same project non-reproducible.
-        score += rng.NextDouble() * 1.2;
+        // Seeded jitter breaks ties. Kept small: at 1.2 it was comparable to the
+        // tag and energy terms and the choices read as arbitrary.
+        score += rng.NextDouble() * 0.45;
 
         return score;
     }
@@ -187,12 +217,16 @@ public sealed class Director(EffectRegistry registry)
     {
         var pool = registry.OfKind("post")
             .Where(e => e.SupportsAspect(aspect))
+            .Where(e => e.FitsEnergy(energy))
             .Where(e => !scene.Conflicts.Contains(e.Id) && !e.Conflicts.Contains(scene.Id))
             .ToList();
         if (pool.Count == 0) return [];
 
-        // Busier sections carry more layers; a sparse intro gets one at most.
-        int want = energy > 0.7 ? 3 : energy > 0.4 ? 2 : 1;
+        // Busier sections carry more layers. A genuinely quiet passage gets
+        // nothing on top at all - that emptiness is what gives the loud sections
+        // somewhere to arrive from.
+        int want = energy > 0.72 ? 3 : energy > 0.45 ? 2 : energy > 0.24 ? 1 : 0;
+        if (want == 0) return [];
 
         var chosen = new List<EffectManifest>();
         foreach (var e in pool.OrderByDescending(e => Score(e, tags, energy, [], rng)))

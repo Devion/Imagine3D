@@ -50,12 +50,17 @@ public sealed record EffectManifest
 
     public bool SupportsAspect(string aspect) => Aspects.Length == 0 || Aspects.Contains(aspect);
 
-    public bool FitsEnergy(double energy)
-    {
-        double lo = EnergyRange.Length > 0 ? EnergyRange[0] : 0;
-        double hi = EnergyRange.Length > 1 ? EnergyRange[1] : 1;
-        return energy >= lo - 0.15 && energy <= hi + 0.15;
-    }
+    [JsonIgnore] public double EnergyLo => EnergyRange.Length > 0 ? EnergyRange[0] : 0;
+    [JsonIgnore] public double EnergyHi => EnergyRange.Length > 1 ? EnergyRange[1] : 1;
+
+    public bool FitsEnergy(double energy, double slack = 0.15) =>
+        energy >= EnergyLo - slack && energy <= EnergyHi + slack;
+
+    /// How far outside its declared band this energy sits. 0 when inside.
+    public double EnergyMiss(double energy) =>
+        energy < EnergyLo ? EnergyLo - energy
+        : energy > EnergyHi ? energy - EnergyHi
+        : 0;
 }
 
 public sealed record EffectParam

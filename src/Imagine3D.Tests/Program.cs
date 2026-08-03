@@ -14,6 +14,9 @@ static class Program
         if (args.Length > 0 && args[0] == "--align")
             return AlignmentReport(args.Skip(1).ToArray()).GetAwaiter().GetResult();
 
+        if (args.Length > 0 && args[0] == "--trim")
+            return TrimReport(args.Skip(1).ToArray());
+
         int failures = 0;
         failures += UnitTests();
 
@@ -144,6 +147,45 @@ static class Program
             Console.WriteLine($"  {l.Start,7:F2}s {(l.Anchored ? "*" : " ")} {Trunc(l.Text, 52)}");
 
         return 0;
+    }
+
+    /// Checks that the size-targeted trim actually lands under its ceiling.
+    ///   dotnet run --project src/Imagine3D.Tests -- --trim <video.mp4> [minutes] [targetMb]
+    static int TrimReport(string[] args)
+    {
+        var src = args.ElementAtOrDefault(0)
+                  ?? @"D:\Dev\Imagine3D\projects\Time\output\Time_16x9.mp4";
+        double minutes = double.TryParse(args.ElementAtOrDefault(1), out var mm) ? mm : 4;
+        double targetMb = double.TryParse(args.ElementAtOrDefault(2), out var tt) ? tt : 185;
+
+        if (!File.Exists(src)) { Console.WriteLine($"not found: {src}"); return 1; }
+
+        var ffmpeg = new Imagine3D.Media.Ffmpeg();
+        double duration = ffmpeg.GetDuration(src);
+        double seconds = Math.Min(duration, minutes * 60);
+        var dst = Path.Combine(Path.GetTempPath(), "i3d_trim_test.mp4");
+
+        Console.WriteLine($"source : {Path.GetFileName(src)}  {duration:F0}s  " +
+                          $"{new FileInfo(src).Length / 1048576.0:F0} MB");
+        Console.WriteLine($"target : first {seconds:F0}s, under {targetMb:F0} MB\n");
+
+        var sw = Stopwatch.StartNew();
+        int kbps = ffmpeg.TrimToSize(src, dst, seconds, targetMb);
+        sw.Stop();
+
+        double actual = new FileInfo(dst).Length / 1048576.0;
+        double outDur = ffmpeg.GetDuration(dst);
+
+        Console.WriteLine($"video bitrate : {kbps} kbps");
+        Console.WriteLine($"encode time   : {sw.Elapsed.TotalSeconds:F0}s");
+        Console.WriteLine($"result        : {actual:F1} MB, {outDur:F1}s");
+        Console.WriteLine($"vs target     : {actual - targetMb:+0.0;-0.0} MB " +
+                          $"({actual / targetMb:P1} of the ceiling)");
+
+        bool ok = actual <= targetMb && Math.Abs(outDur - seconds) < 1.0;
+        Console.WriteLine(ok ? "\nPASS - under the ceiling and the right length"
+                             : "\nFAIL - over the ceiling or the wrong length");
+        return ok ? 0 : 1;
     }
 
     static int UnitTests()
