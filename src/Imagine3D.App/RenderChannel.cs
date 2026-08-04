@@ -109,39 +109,52 @@ public sealed class RenderChannel(WebSocket socket) : IDisposable
 
     /// Read messages until a binary one arrives, surfacing any error the page
     /// reports along the way. Text messages in between are status/thumbnails.
+    ///
+    /// `runId` scopes what counts as our failure: the page tags each reply with
+    /// the run it belongs to, and an error raised for a different run - one that
+    /// was cancelled, or superseded by this one - must not fail this render.
     public async Task<byte[]> ReadBinaryAsync(
-        TimeSpan timeout, Action<string>? onText = null, CancellationToken ct = default)
+        TimeSpan timeout, string? runId = null,
+        Action<string>? onText = null, CancellationToken ct = default)
     {
         while (true)
         {
             var msg = await ReadAsync(timeout, ct);
             if (msg.IsBinary) return msg.Binary;
 
-            var kind = PeekType(msg.Text);
-            if (kind == "error")
-                throw new Exception($"Render page error: {ExtractMessage(msg.Text)}");
+            if (Peek(msg.Text, "type") == "error")
+            {
+                var owner = Peek(msg.Text, "runId");
+                if (runId is null || owner is null || owner == runId)
+                    throw new Exception($"Render page error: {Peek(msg.Text, "message") ?? msg.Text}");
+                continue;
+            }
             onText?.Invoke(msg.Text);
         }
     }
 
-    static string PeekType(string json)
+    /// Throw away anything the page has queued up. A run that was cancelled or
+    /// timed out can leave a frame or a thumbnail behind, and reading that as the
+    /// next run's reply desyncs the whole lockstep protocol.
+    public int Drain()
     {
-        try
-        {
-            using var d = JsonDocument.Parse(json);
-            return d.RootElement.TryGetProperty("type", out var t) ? t.GetString() ?? "" : "";
-        }
-        catch { return ""; }
+        int dropped = 0;
+        while (_incoming.Reader.TryRead(out _)) dropped++;
+        return dropped;
     }
 
-    static string ExtractMessage(string json)
+    /// One top-level string property out of a page message, or null.
+    public static string? Peek(string json, string property)
     {
         try
         {
             using var d = JsonDocument.Parse(json);
-            return d.RootElement.TryGetProperty("message", out var m) ? m.GetString() ?? json : json;
+            return d.RootElement.TryGetProperty(property, out var v)
+                   && v.ValueKind == JsonValueKind.String
+                ? v.GetString()
+                : null;
         }
-        catch { return json; }
+        catch { return null; }
     }
 
     public void Dispose()

@@ -45,7 +45,7 @@ public sealed class Session
 
     public bool IsBusy
     {
-        get { lock (_gate) return _running is { IsCancellationRequested: false }; }
+        get { lock (_gate) return _running is not null; }
     }
 
     /// Wait for the page to attach a channel that is not `previous`.
@@ -63,24 +63,39 @@ public sealed class Session
         return null;
     }
 
-    /// Claim the single generation slot. Returns null when a run is already going -
-    /// two concurrent renders would fight over the one render channel.
-    public CancellationTokenSource? TryBeginRun()
+    /// Claim the single generation slot and run `work` on the thread pool.
+    /// Returns null on success, or why it was refused.
+    ///
+    /// The slot is held until the run has actually finished unwinding, cancelled
+    /// or not: a cancelled render is still driving the page for as long as it
+    /// takes to stop, and a second one starting in that window would talk over it
+    /// on the one render channel.
+    public string? TryStartRun(Func<CancellationToken, Task> work)
     {
         lock (_gate)
         {
-            if (_running is { IsCancellationRequested: false }) return null;
-            _running = new CancellationTokenSource();
-            return _running;
-        }
-    }
+            if (_running is not null)
+                return _running.IsCancellationRequested
+                    ? "The previous run is still stopping - give it a moment."
+                    : "A generation run is already in progress.";
 
-    public void EndRun()
-    {
-        lock (_gate)
-        {
-            _running?.Dispose();
-            _running = null;
+            var cts = new CancellationTokenSource();
+            _running = cts;
+
+            _ = Task.Run(async () =>
+            {
+                try { await work(cts.Token); }
+                finally
+                {
+                    lock (_gate)
+                    {
+                        if (ReferenceEquals(_running, cts)) _running = null;
+                        cts.Dispose();
+                    }
+                }
+            });
+
+            return null;
         }
     }
 

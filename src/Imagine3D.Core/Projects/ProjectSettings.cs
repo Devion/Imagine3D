@@ -18,12 +18,30 @@ public sealed class ProjectSettings
     /// renders the same video. "Reroll" is an explicit bump of this number.
     public int Seed { get; set; } = 1;
 
+    /// Roll a fresh Seed at the start of every planning run.
+    ///
+    /// Without this a new project starts at seed 1 and stays there, so separate
+    /// songs are planned from an identical RNG stream and keep making the same
+    /// opening choice. The roll is written back to project.json before the
+    /// storyboard is built, so a video is still exactly reproducible - turn this
+    /// off and type the seed the storyboard records.
+    public bool RandomSeedEachRun { get; set; } = true;
+
     /// "libx264" (compatible) or "h264_nvenc" / "hevc_nvenc" (fast on the 5090).
     public string Encoder { get; set; } = "libx264";
     public int Crf { get; set; } = 18;
 
     /// Render at N x the output size then downscale - crisper demoscene look.
     public int Supersample { get; set; } = 1;
+
+    /// Effect id for the first scene; "" lets the director choose.
+    ///
+    /// The opening pick is the one the director has the least to go on: there is
+    /// no history to penalise, intros are nearly always low-energy, and every new
+    /// project starts on the same seed - so separate songs keep opening with the
+    /// same effect. Pinning one here breaks that without touching the rest of the
+    /// storyboard. An id that no longer exists is ignored, not an error.
+    public string OpeningEffect { get; set; } = "";
 
     /// Also write a shortened copy of the finished video alongside the full one,
     /// for platforms with a length cap. The full render is never replaced.
@@ -84,6 +102,7 @@ public sealed class ProjectSettings
         Fps = Math.Clamp(Fps, 12, 60);
         Crf = Math.Clamp(Crf, 0, 51);
         Supersample = Math.Clamp(Supersample, 1, 4);
+        OpeningEffect = (OpeningEffect ?? "").Trim();
         TrimMinutes = Math.Clamp(TrimMinutes, 0.25, 60);
         TrimTargetMb = TrimTargetMb <= 0 ? 0 : Math.Clamp(TrimTargetMb, 5, 4000);
         if (Seed == 0) Seed = 1;

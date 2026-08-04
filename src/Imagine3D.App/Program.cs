@@ -160,6 +160,12 @@ app.MapGet("/api/projects/{name}", (ProjectStore store, string name) =>
             output = File.Exists(paths.OutputVideo(settings))
                 ? $"/media/{name}/output/{Path.GetFileName(paths.OutputVideo(settings))}"
                 : null,
+            // Named after the current Length setting, so this goes null as soon as
+            // the user asks for a different one - which is correct: the copy that
+            // exists is not the copy those settings describe.
+            trimmedOutput = File.Exists(paths.OutputVideoTrimmed(settings))
+                ? $"/media/{name}/output/{Path.GetFileName(paths.OutputVideoTrimmed(settings))}"
+                : null,
             mediaBase = $"/media/{name}",
         }, Json.Options);
     }
@@ -175,9 +181,11 @@ app.MapPut("/api/projects/{name}/settings", (ProjectStore store, string name, Pr
     current.Aspect = incoming.Aspect;
     current.Fps = incoming.Fps;
     current.Seed = incoming.Seed;
+    current.RandomSeedEachRun = incoming.RandomSeedEachRun;
     current.Encoder = incoming.Encoder;
     current.Crf = incoming.Crf;
     current.Supersample = incoming.Supersample;
+    current.OpeningEffect = incoming.OpeningEffect;
     current.SaveTrimmedCopy = incoming.SaveTrimmedCopy;
     current.TrimMinutes = incoming.TrimMinutes;
     current.TrimTargetMb = incoming.TrimTargetMb;
@@ -250,21 +258,18 @@ app.MapGet("/api/projects/{name}/storyboard", (ProjectStore store, string name) 
 app.MapPost("/api/projects/{name}/generate",
     (GenerationPipeline pipeline, Session session, string name, GenerateRequest req) =>
 {
-    var cts = session.TryBeginRun();
-    if (cts is null) return Results.Conflict(new { error = "A generation run is already in progress." });
-
-    session.CurrentProject = name;
     var progress = session.ProgressSink();
 
     // Fire and forget: the HTTP call returns at once and every subsequent update
     // reaches the UI over the WebSocket.
-    _ = Task.Run(async () =>
+    var refused = session.TryStartRun(async ct =>
     {
+        session.CurrentProject = name;
         try
         {
             await pipeline.RunAsync(name,
                 new PipelineOptions(req.UseLlm, req.GenerateLtx, req.Force, req.UseExistingStoryboard, req.PlanOnly),
-                progress, cts.Token);
+                progress, ct);
         }
         catch (OperationCanceledException)
         {
@@ -279,10 +284,42 @@ app.MapPost("/api/projects/{name}/generate",
             Console.Error.WriteLine($"[generate] FAILED: {e}");
             progress.Report(new StageProgress(PipelineStage.Done, 0, e.Message, Failed: true));
         }
-        finally { session.EndRun(); }
     });
 
-    return Results.Accepted();
+    return refused is null ? Results.Accepted() : Results.Conflict(new { error = refused });
+});
+
+// Make the shortened copy from an MP4 that is already rendered, for when the
+// checkbox was not ticked before the render. Uses the same Length and Max size
+// settings, so the result is byte-for-byte what the render would have written.
+//
+// Takes the run slot like a generation does: a two-pass re-encode is minutes of
+// CPU, and it must not run while a render is driving the page.
+app.MapPost("/api/projects/{name}/trim",
+    (ProjectStore store, Ffmpeg ffmpeg, Session session, string name) =>
+{
+    var progress = session.ProgressSink();
+
+    var refused = session.TryStartRun(async ct =>
+    {
+        session.CurrentProject = name;
+        try
+        {
+            var paths = store.Open(name);
+            var settings = store.Load(paths);
+            var result = await Task.Run(
+                () => new VideoTrimmer(ffmpeg).Run(paths, settings, progress), ct);
+            progress.Report(new StageProgress(PipelineStage.Done, 1.0, result.Summary));
+        }
+        catch (Exception e)
+        {
+            session.Fail(e.ToString());
+            Console.Error.WriteLine($"[trim] FAILED: {e}");
+            progress.Report(new StageProgress(PipelineStage.Done, 0, e.Message, Failed: true));
+        }
+    });
+
+    return refused is null ? Results.Accepted() : Results.Conflict(new { error = refused });
 });
 
 app.MapPost("/api/cancel", (Session session) => { session.Cancel(); return Results.Ok(); });

@@ -32,6 +32,14 @@ public sealed class LtxStage(
             return storyboard;
         }
 
+        // Say so when the song cannot hold what was asked for, rather than
+        // quietly generating fewer and leaving it looking like a failure.
+        if (picks.Count < settings.Ltx.MaxInserts)
+            progress.Report(new StageProgress(PipelineStage.Ltx, 0,
+                $"Room for {picks.Count} of the {settings.Ltx.MaxInserts} inserts requested - " +
+                $"{storyboard.Scenes.Length} scenes across {storyboard.Duration / 60:0.#} min " +
+                $"at {settings.Ltx.ClipSeconds:0.#}s each"));
+
         Directory.CreateDirectory(paths.LtxDir);
         var cache = LoadCache(paths);
         var song = SongText.Parse(paths.FindTxt() is { } t ? File.ReadAllText(t) : null);
@@ -55,7 +63,15 @@ public sealed class LtxStage(
             double frac = i / (double)picks.Count;
 
             var prompt = BuildPrompt(song, scene, storyboard, analysis, start);
-            var key = HashKey(prompt, lw, lh, settings.Ltx.ClipSeconds, settings.Seed + i);
+            // Keyed on what the clip depicts plus its slot - not on the project
+            // seed. The seed used to be in here, which made every re-plan a total
+            // miss now that a run rolls a fresh one, so "Redo storyboard" would
+            // regenerate every clip through ComfyUI. The prompt already carries
+            // everything the seed changes about a clip's content (palette, mood,
+            // the lyric at that point); the slot index only keeps two inserts that
+            // happen to share a prompt - common on instrumental sections - from
+            // collapsing onto one cached file.
+            var key = HashKey(prompt, lw, lh, settings.Ltx.ClipSeconds, i);
             var clipPath = Path.Combine(paths.LtxDir, $"clip_{i + 1:D3}.mp4");
 
             if (cache.TryGetValue(key, out var cachedFile) && File.Exists(cachedFile))
@@ -152,27 +168,46 @@ public sealed class LtxStage(
 
     /// Spread inserts over the highest-energy scenes, keeping them apart so they
     /// punctuate the demo rather than clumping in one passage.
+    ///
+    /// Two things here used to make MaxInserts close to meaningless:
+    ///
+    /// The spacing was `max(clipSeconds * 3, duration / (maxInserts * 2))`, and on
+    /// any normal song the first term won - a 5 second clip pinned the gap at 15s
+    /// however many inserts were asked for, so 6 and 12 placed exactly the same
+    /// clips. The requested count now sets the spacing and the clip length only
+    /// keeps two clips from touching.
+    ///
+    /// And each scene could host at most one clip, which capped the total at the
+    /// scene count - eleven scenes could never satisfy a request for twelve - and
+    /// valued a 26 second section no higher than an 8 second one.
     static List<(StoryScene Scene, double Start)> PickInsertPoints(
         Storyboard sb, AudioAnalysis analysis, ProjectSettings settings)
     {
-        var picks = new List<(StoryScene, double)>();
         double clip = settings.Ltx.ClipSeconds;
-        double minGap = Math.Max(clip * 3, sb.Duration / Math.Max(1, settings.Ltx.MaxInserts * 2));
+        int want = Math.Max(1, settings.Ltx.MaxInserts);
+        double minGap = Math.Max(clip * 1.2, sb.Duration / (want + 1));
 
-        foreach (var scene in sb.Scenes.OrderByDescending(s => s.Energy))
+        var candidates = new List<(StoryScene Scene, double Start)>();
+        foreach (var scene in sb.Scenes)
         {
-            if (picks.Count >= settings.Ltx.MaxInserts) break;
-            if (scene.Duration < clip + 1) continue;
-
             // Land just after the scene opens so the transition is not overlapped.
-            double start = scene.Start + Math.Min(1.0, scene.Duration * 0.1);
-            if (start + clip > sb.Duration) continue;
-            if (picks.Any(p => Math.Abs(p.Item2 - start) < minGap)) continue;
-
-            picks.Add((scene, start));
+            double lead = Math.Min(1.0, scene.Duration * 0.1);
+            for (double start = scene.Start + lead; start + clip <= scene.End; start += minGap)
+            {
+                if (start + clip > sb.Duration) break;
+                candidates.Add((scene, start));
+            }
         }
 
-        return picks.OrderBy(p => p.Item2).ToList();
+        var picks = new List<(StoryScene Scene, double Start)>();
+        foreach (var c in candidates.OrderByDescending(c => c.Scene.Energy).ThenBy(c => c.Start))
+        {
+            if (picks.Count >= want) break;
+            if (picks.Any(p => Math.Abs(p.Start - c.Start) < minGap)) continue;
+            picks.Add(c);
+        }
+
+        return picks.OrderBy(p => p.Start).ToList();
     }
 
     LtxInsert MakeInsert(
@@ -221,9 +256,9 @@ public sealed class LtxStage(
 
     static int RoundTo32(double v) => Math.Max(32, (int)(Math.Round(v / 32.0) * 32));
 
-    static string HashKey(string prompt, int w, int h, double seconds, int seed)
+    static string HashKey(string prompt, int w, int h, double seconds, int slot)
     {
-        var raw = $"{prompt}|{w}x{h}|{seconds}|{seed}";
+        var raw = $"{prompt}|{w}x{h}|{seconds}|{slot}";
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(raw)))[..16];
     }
 

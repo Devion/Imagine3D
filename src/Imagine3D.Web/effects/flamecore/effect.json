@@ -1,0 +1,40 @@
+{
+  "id": "flamecore",
+  "name": "Flame core",
+  "kind": "raymarch",
+  "tags": ["fire", "warm", "organic", "aggressive", "dream", "cinematic"],
+  "energyRange": [0.3, 0.95],
+  "cost": "medium",
+  "description": "A single volumetric flame raymarched through a noise-eroded sphere, glowing from the inside out. Where the 2D fire effect gives a wall of flame, this gives one body of it with depth.",
+  "shader": "shader.frag",
+  "params": {
+    "speed": {
+      "type": "float",
+      "default": "2.0 + 1.4*rms",
+      "min": 0.2,
+      "max": 6.0,
+      "description": "How fast the flame licks upward."
+    },
+    "turbulence": {
+      "type": "float",
+      "default": "0.25 + 0.18*bass",
+      "min": 0.05,
+      "max": 0.7,
+      "description": "How hard the noise erodes the flame body. Low is a smooth teardrop, high is torn and ragged."
+    },
+    "glow": {
+      "type": "float",
+      "default": "2.0 + 0.9*beatPulse",
+      "min": 0.5,
+      "max": 4.0,
+      "description": "Accumulated glow gain. Drives how far the flame's light reaches into the dark."
+    },
+    "tint": {
+      "type": "float",
+      "default": "0.55",
+      "min": 0.0,
+      "max": 1.0,
+      "description": "Blend toward the project palette. 0 keeps the native orange-to-blue gradient."
+    }
+  }
+}

@@ -78,23 +78,32 @@ public sealed class GenerationPipeline(
         }
 
         // 3. Storyboard --------------------------------------------------------
+        // A fresh seed per run, so consecutive songs are not planned from an
+        // identical RNG stream. Saved before the director runs and echoed in the
+        // stage line: the seed in project.json is always the one the storyboard
+        // next to it was built with, which is what keeps a video reproducible.
+        // The re-render path never reaches here - it returned above, on purpose.
+        if (settings.RandomSeedEachRun)
+        {
+            settings.Seed = Random.Shared.Next(1, 1_000_000);
+            store.Save(paths, settings);
+        }
+
         progress.Report(new StageProgress(PipelineStage.Storyboard, 0.2, "Choosing scenes and effects"));
         var storyboard = new Director(registry.Current).Build(analysis, settings, intent);
         File.WriteAllText(paths.StoryboardFile, JsonSerializer.Serialize(storyboard, Json.Indented));
         progress.Report(new StageProgress(PipelineStage.Storyboard, 1.0,
             $"{storyboard.Scenes.Length} scenes, " +
             $"{storyboard.Scenes.Sum(s => s.Post.Length)} post effects, " +
-            $"{storyboard.Texts.Length} text cues"));
-
-        if (options.PlanOnly)
-        {
-            progress.Report(new StageProgress(PipelineStage.Ltx, 1.0, "Skipped"));
-            progress.Report(new StageProgress(PipelineStage.Done, 1.0,
-                $"Storyboard only - {storyboard.Scenes.Length} scenes planned, nothing rendered"));
-            return paths.StoryboardFile;
-        }
+            $"{storyboard.Texts.Length} text cues - seed {settings.Seed}"));
 
         // 4. LTX ---------------------------------------------------------------
+        // Ahead of the plan-only exit on purpose. The director always returns an
+        // empty Ltx list - inserts are attached here - so re-planning used to drop
+        // every insert on the floor, and the next "Render this storyboard" then
+        // produced a video with no clips in it at all. A re-plan has to place the
+        // inserts, and generate any clip it does not already have, or it is not a
+        // plan of the same video.
         if (options.GenerateLtx && settings.Ltx.Enabled)
         {
             // "render" init mode asks the page for a frame of the demo at the insert
@@ -107,6 +116,14 @@ public sealed class GenerationPipeline(
         else
         {
             progress.Report(new StageProgress(PipelineStage.Ltx, 1.0, "Skipped"));
+        }
+
+        if (options.PlanOnly)
+        {
+            var withLtx = storyboard.Ltx.Length > 0 ? $", {storyboard.Ltx.Length} LTX inserts" : "";
+            progress.Report(new StageProgress(PipelineStage.Done, 1.0,
+                $"Storyboard only - {storyboard.Scenes.Length} scenes{withLtx} planned, nothing rendered"));
+            return paths.StoryboardFile;
         }
 
         // 5+6. Render and encode ----------------------------------------------
@@ -127,6 +144,10 @@ public sealed class GenerationPipeline(
     {
         var channel = session.Channel
             ?? throw new InvalidOperationException("The render page is not connected.");
+
+        // A snapshot that timed out earlier can still land afterwards; that image
+        // is not the answer to this request.
+        channel.Drain();
 
         await channel.SendJsonAsync(new { cmd = "snapshot", t, width = w, height = h }, ct);
         return await channel.ReadBinaryAsync(TimeSpan.FromSeconds(120), ct: ct);

@@ -56,6 +56,9 @@ export class Renderer {
     this.seed = 0;
     this.scenePrograms = new Map();
     this.videos = new Map();
+    // Clips that timed out seeking, so the warning is reported once per clip
+    // rather than once per frame.
+    this.stuckClips = new Set();
     this.warnings = [];
     this.pixelBuffer = new Uint8Array(width * height * 4);
   }
@@ -318,7 +321,7 @@ export class Renderer {
     if (insert) {
       const v = this.videos.get(insert.index);
       if (v) {
-        this.uploadVideoFrame(v, t - insert.start);
+        this.uploadVideoFrame(v);
         const clipT = (t - insert.start) / Math.max(1e-6, insert.duration);
         const vState = this.baseState(t, scene, { clipT });
         const opacityFn = this.compiled.get(`ltx${insert.index}`)?.__opacity;
@@ -360,20 +363,69 @@ export class Renderer {
     return null;
   }
 
+  /** Where in the clip time t falls, clamped to a position that has a frame. */
+  clipOffset(v, insert, t) {
+    // Stay a hair inside the clip. LTX returns 4.83s for a 5s request, and
+    // seeking to exactly `duration` does not reliably produce a frame.
+    const end = Math.max(0, (v.el.duration || insert.duration) - 1 / 60);
+    return Math.max(0, Math.min(end, t - insert.start));
+  }
+
   /**
-   * Seek the clip to the exact offset this frame needs. Offline rendering cannot
-   * rely on playback rate - the render is not running in real time.
+   * Put the clip this frame needs on the right frame, and wait for it.
+   *
+   * Must be awaited before renderAt(t) for the same t. Setting `currentTime` is
+   * asynchronous - the decoded frame for the new position only exists once
+   * `seeked` fires - while renderAt() is synchronous and the offline loop reads
+   * pixels the instant it returns. Uploading in that window takes whatever frame
+   * the element still held, and because each frame re-seeks 1/fps further on, an
+   * in-flight seek is aborted before it can ever deliver. Whenever the render
+   * outruns the decoder the texture never leaves its initial black - and black
+   * through `screen` or `difference` is exactly the source frame, so the insert
+   * silently does nothing. That is the bug this await closes; it is a race, which
+   * is why clips appeared on some renders and not others.
    */
-  uploadVideoFrame(v, offset) {
+  async prepareAt(t) {
+    const insert = this.activeInsert(t);
+    if (!insert) return;
+    const v = this.videos.get(insert.index);
+    if (!v) return;
+
+    const el = v.el;
+    const want = this.clipOffset(v, insert, t);
+    if (el.readyState >= 2 && Math.abs(el.currentTime - want) <= 0.02) return;
+
+    await new Promise((resolve) => {
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        el.removeEventListener('seeked', done);
+        clearTimeout(timer);
+        resolve();
+      };
+      // A clip that will not seek must cost one frame, not the whole render.
+      const timer = setTimeout(() => {
+        if (!this.stuckClips.has(insert.index)) {
+          this.stuckClips.add(insert.index);
+          window.__report?.('warn',
+            `LTX clip ${insert.clipFile} did not seek within 3s - it will be missing from the render`);
+        }
+        done();
+      }, 3000);
+      el.addEventListener('seeked', done);
+      el.currentTime = want;
+    });
+  }
+
+  /** Upload the clip's current decoded frame. prepareAt() chose which one. */
+  uploadVideoFrame(v) {
     const gl = this.gl;
-    const want = Math.max(0, Math.min(v.el.duration || offset, offset));
-    if (Math.abs(v.el.currentTime - want) > 0.02) v.el.currentTime = want;
-    if (v.el.readyState >= 2) {
-      gl.bindTexture(gl.TEXTURE_2D, v.tex);
-      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, v.el);
-      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-    }
+    if (v.el.readyState < 2) return;
+    gl.bindTexture(gl.TEXTURE_2D, v.tex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, v.el);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
   }
 
   blit(from, to) {
@@ -413,6 +465,10 @@ export class Renderer {
     this.feedback.dispose();
     this.output.dispose();
     this.text.dispose();
+    // Every run builds a renderer on the same canvas and so the same context;
+    // anything left behind here accumulates for the life of the window.
+    this.gl.deleteTexture(this.blank);
+    this.gl.deleteProgram(this.copy.program);
     for (const v of this.videos.values()) {
       this.gl.deleteTexture(v.tex);
       v.el.src = '';

@@ -32,12 +32,26 @@ public sealed class RenderService(Ffmpeg ffmpeg)
             ?? throw new InvalidOperationException("Project has no source MP3 to mux.");
         var outPath = paths.OutputVideo(settings);
 
+        // Every run is identified so the page's replies can be attributed. Without
+        // it a leftover "ready" from an earlier run is indistinguishable from this
+        // one's, and the frame loop starts while the page is still loading - which
+        // shows up as the page drawing with no storyboard.
+        var runId = Guid.NewGuid().ToString("N")[..8];
+
         progress.Report(new StageProgress(PipelineStage.Render, 0,
             $"Preparing page - {renderW}x{renderH} -> {outW}x{outH} @ {fps}fps, {total} frames"));
+
+        // Nothing the page sent before this point can be an answer to anything we
+        // are about to ask.
+        int stale = channel.Drain();
+        if (stale > 0)
+            progress.Report(new StageProgress(PipelineStage.Render, 0,
+                $"Discarded {stale} stale message(s) left over from an earlier run"));
 
         await channel.SendJsonAsync(new
         {
             cmd = "renderBegin",
+            runId,
             project = paths.Name,
             width = renderW,
             height = renderH,
@@ -50,9 +64,7 @@ public sealed class RenderService(Ffmpeg ffmpeg)
         // The page fetches analysis.json and storyboard.json over HTTP itself -
         // they are megabytes of arrays and have no business going through the
         // control socket.
-        var ready = await channel.ReadAsync(SetupTimeout, ct);
-        if (ready.IsBinary || !ready.Text.Contains("\"ready\""))
-            throw new Exception($"Render page failed to initialise: {Trunc(ready.Text, 400)}");
+        await WaitForReadyAsync(channel, runId, ct);
 
         using var pipe = new FramePipe(
             ffmpeg, outPath, renderW, renderH, outW, outH, fps, mp3,
@@ -66,9 +78,10 @@ public sealed class RenderService(Ffmpeg ffmpeg)
         {
             ct.ThrowIfCancellationRequested();
 
-            await channel.SendJsonAsync(new { cmd = "frame", n, thumb = n % thumbEvery == 0 }, ct);
+            await channel.SendJsonAsync(
+                new { cmd = "frame", runId, n, thumb = n % thumbEvery == 0 }, ct);
 
-            var rgba = await channel.ReadBinaryAsync(FrameTimeout,
+            var rgba = await channel.ReadBinaryAsync(FrameTimeout, runId,
                 onText: text =>
                 {
                     var t = ExtractThumb(text);
@@ -87,7 +100,7 @@ public sealed class RenderService(Ffmpeg ffmpeg)
             }
         }
 
-        await channel.SendJsonAsync(new { cmd = "renderEnd" }, ct);
+        await channel.SendJsonAsync(new { cmd = "renderEnd", runId }, ct);
 
         progress.Report(new StageProgress(PipelineStage.Encode, 0.5,
             $"Encoding {outW}x{outH} and muxing audio"));
@@ -106,58 +119,58 @@ public sealed class RenderService(Ffmpeg ffmpeg)
         return result;
     }
 
+    /// Wait for the page to report that it has *this* run's storyboard loaded and
+    /// can draw. Anything else on the wire - a frame from an interrupted run, a
+    /// late thumbnail, a ready meant for a run that no longer exists - is skipped
+    /// rather than mistaken for the answer.
+    static async Task WaitForReadyAsync(RenderChannel channel, string runId, CancellationToken ct)
+    {
+        var deadline = DateTime.UtcNow + SetupTimeout;
+        while (true)
+        {
+            var remaining = deadline - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+                throw new TimeoutException(
+                    $"The render page did not become ready within {SetupTimeout.TotalSeconds:F0}s. " +
+                    "It most likely threw while loading the storyboard - check the devtools console.");
+
+            var msg = await channel.ReadAsync(remaining, ct);
+            if (msg.IsBinary) continue;
+
+            var type = RenderChannel.Peek(msg.Text, "type");
+            var owner = RenderChannel.Peek(msg.Text, "runId");
+
+            if (type == "error" && (owner is null || owner == runId))
+                throw new Exception("Render page failed to initialise: " +
+                    (RenderChannel.Peek(msg.Text, "message") ?? Trunc(msg.Text, 400)));
+
+            // An untagged ready can only come from a page old enough to predate
+            // run ids, and such a page cannot also be sending tagged ones.
+            if (type == "ready" && (owner is null || owner == runId)) return;
+        }
+    }
+
     /// The shortened upload copy. Returns a fragment for the progress line.
+    ///
+    /// The work itself lives in VideoTrimmer, shared with the panel's on-demand
+    /// button; only the failure policy differs here - the copy is a convenience,
+    /// and losing it must never fail a render that has already finished.
     string WriteTrimmedCopy(
         string source, ProjectPaths paths, ProjectSettings settings,
         double duration, IProgress<StageProgress> progress)
     {
-        double limit = settings.TrimMinutes * 60;
-        double clipSeconds = Math.Min(duration, limit);
-        bool needsTrim = duration > limit + 0.5;
-
-        var target = settings.TrimTargetMb;
-        var trimmed = paths.OutputVideoTrimmed(settings);
-
-        // Nothing to do: short enough already and no size ceiling asked for.
-        if (!needsTrim && target <= 0)
-            return $"  (already under {settings.TrimMinutes:0.##} min, no copy needed)";
-
-        // A stream copy is instant and lossless, so use it whenever the result
-        // would already sit under the ceiling - re-encoding to reach a size you
-        // are already below only loses quality.
-        long fullBytes = new FileInfo(source).Length;
-        double copyMb = fullBytes / (1024.0 * 1024.0) * (clipSeconds / Math.Max(0.001, duration));
-
-        if (target <= 0 || copyMb <= target)
-        {
-            if (!needsTrim) return $"  (already under {settings.TrimMinutes:0.##} min and {target:0} MB)";
-            progress.Report(new StageProgress(PipelineStage.Encode, 0.9,
-                $"Copying a {settings.TrimMinutes:0.##} minute cut"));
-            ffmpeg.TrimCopy(source, trimmed, clipSeconds);
-            return $"  (+ {Path.GetFileName(trimmed)}, {Mb(trimmed):F0} MB, stream copy)";
-        }
-
-        progress.Report(new StageProgress(PipelineStage.Encode, 0.9,
-            $"Re-encoding a {settings.TrimMinutes:0.##} minute copy to fit {target:0} MB " +
-            $"(two-pass, ~{clipSeconds / 60:0.#} min of video)"));
-
         try
         {
-            int kbps = ffmpeg.TrimToSize(source, trimmed, clipSeconds, target);
-            double actual = Mb(trimmed);
-            var verdict = actual <= target ? "" : $" - OVER by {actual - target:F0} MB";
-            return $"  (+ {Path.GetFileName(trimmed)}, {actual:F0} MB at {kbps} kbps{verdict})";
+            var r = new VideoTrimmer(ffmpeg).Run(source, paths, settings, duration, progress);
+            return r.Wrote ? $"  (+ {r.Summary})" : $"  ({r.Summary})";
         }
         catch (Exception e)
         {
-            // The copy is a convenience; losing it must not fail a finished render.
             progress.Report(new StageProgress(PipelineStage.Encode, 0.95,
                 $"Trimmed copy failed: {e.Message}"));
             return $"  (trimmed copy failed: {Trunc(e.Message, 70)})";
         }
     }
-
-    static double Mb(string path) => new FileInfo(path).Length / (1024.0 * 1024.0);
 
     static string? ExtractThumb(string text)
     {

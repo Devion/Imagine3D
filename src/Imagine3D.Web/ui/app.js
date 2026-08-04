@@ -14,12 +14,20 @@ const STAGES = [
   { key: 'encode', name: 'Encode + mux' },
 ];
 
+/// Kinds that can carry a scene. Post, transition and text effects are layers,
+/// not something the first scene could be.
+const SCENE_KINDS = ['scene2d', 'scene3d', 'raymarch'];
+
 const state = {
   project: null,
   detail: null,
   analysis: null,
   storyboard: null,
+  effects: [],
   running: false,
+  // A manual shortened copy reports over the same channel as a generation, but
+  // it is not a generation - it has no chain to light up.
+  trimOnly: false,
 };
 
 // ------------------------------------------------------------------ api
@@ -83,6 +91,13 @@ function onStageProgress(p) {
     return;
   }
 
+  // Keep a trim's ticks off the chain: marking "encode" active would light every
+  // stage above it as done, claiming work that never ran.
+  if (state.trimOnly) {
+    setTrimStatus(p.detail ?? '');
+    return;
+  }
+
   const el = $(`stage-${p.stage}`);
   if (!el) return;
 
@@ -112,6 +127,15 @@ async function finishRun(p) {
   state.running = false;
   setRunButtons(true);
   $('btn-cancel').classList.add('hidden');
+
+  if (state.trimOnly) {
+    state.trimOnly = false;
+    // refreshProject first: it rewrites the status line from what is on disk,
+    // and the outcome of this run is the more useful thing to leave on screen.
+    await refreshProject();
+    setTrimStatus(p.detail ?? '', p.failed);
+    return;
+  }
 
   if (p.failed) {
     showWarnings([p.detail], true);
@@ -190,7 +214,16 @@ async function refreshProject() {
     : '<div class="muted">No MP3 imported yet.</div>';
 
   $('btn-analyze').disabled = !d.mp3;
+  setTrimStatus(d.trimmedOutput
+    ? `Already there: ${d.trimmedOutput.split('/').pop()}`
+    : '');
   setRunButtons(!state.running);
+}
+
+function setTrimStatus(text, isError = false) {
+  const el = $('trim-status');
+  el.textContent = text;
+  el.className = `hint${isError ? ' bad' : ''}`;
 }
 
 function applySettings(s) {
@@ -202,6 +235,8 @@ function applySettings(s) {
   $('crf-out').textContent = String(s.crf);
   $('supersample').value = String(s.supersample);
   $('seed').value = String(s.seed);
+  $('random-seed').checked = s.randomSeedEachRun !== false;
+  populateOpeners(s.aspect, s.openingEffect ?? '');
   $('trim-enabled').checked = !!s.saveTrimmedCopy;
   $('trim-minutes').value = String(s.trimMinutes ?? 4);
   $('trim-mb').value = String(s.trimTargetMb ?? 0);
@@ -210,6 +245,37 @@ function applySettings(s) {
   $('ltx-count').value = String(s.ltx?.maxInserts ?? 6);
   $('ltx-init').value = s.ltx?.initMode ?? 'render';
   $('ltx-enhance').checked = !!s.ltx?.promptEnhance;
+}
+
+/// Effects are discovered by scanning folders, so the list is whatever is on disk
+/// right now - never a hard-coded set here.
+async function loadEffects() {
+  try { state.effects = (await api('api/effects')) ?? []; }
+  catch { state.effects = []; }   // the dropdown degrades to Auto only
+}
+
+function populateOpeners(aspect, selected) {
+  const sel = $('opening-effect');
+  const pool = state.effects
+    .filter((e) => SCENE_KINDS.includes(e.kind))
+    .filter((e) => !e.aspects?.length || e.aspects.includes(aspect))
+    .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
+
+  const opts = ['<option value="">Auto — director picks</option>'];
+  for (const e of pool) {
+    const band = `${e.energyRange?.[0] ?? 0}–${e.energyRange?.[1] ?? 1}`;
+    opts.push(`<option value="${escapeHtml(e.id)}" title="${escapeHtml(e.description ?? '')}"
+      >${escapeHtml(e.name || e.id)} — energy ${band}</option>`);
+  }
+
+  // Keep a pin that is no longer available visible rather than silently
+  // resetting to Auto: the director ignores it, and the user should be able to
+  // see that is what happened.
+  if (selected && !pool.some((e) => e.id === selected))
+    opts.push(`<option value="${escapeHtml(selected)}">${escapeHtml(selected)} — not available</option>`);
+
+  sel.innerHTML = opts.join('');
+  sel.value = selected ?? '';
 }
 
 function collectSettings() {
@@ -222,6 +288,8 @@ function collectSettings() {
     crf: parseInt($('crf').value, 10),
     supersample: parseInt($('supersample').value, 10),
     seed: Math.max(1, parseInt($('seed').value, 10) || 1),
+    randomSeedEachRun: $('random-seed').checked,
+    openingEffect: $('opening-effect').value,
     saveTrimmedCopy: $('trim-enabled').checked,
     trimMinutes: Math.max(0.25, parseFloat($('trim-minutes').value) || 4),
     trimTargetMb: Math.max(0, parseFloat($('trim-mb').value) || 0),
@@ -487,6 +555,8 @@ function setRunButtons(enabled) {
   $('btn-plan').disabled = !enabled || !hasAnalysis;
   $('btn-render-existing').disabled = !enabled || !hasStoryboard;
   $('btn-analyze').disabled = !enabled;
+  // Nothing to shorten until a full render exists in the output folder.
+  $('btn-trim-now').disabled = !enabled || !state.detail?.output;
 }
 
 $('btn-generate').addEventListener('click', () => startRun({
@@ -496,9 +566,12 @@ $('btn-generate').addEventListener('click', () => startRun({
 }));
 
 // Re-plan only: the director runs again and writes storyboard.json, nothing is
-// rendered. Seconds rather than minutes, which makes rerolling actually usable.
+// rendered. Seconds rather than minutes, which makes rerolling actually usable -
+// unless LTX is on, in which case the new plan's inserts have to be generated
+// before the storyboard describes a complete video.
 $('btn-plan').addEventListener('click', () => startRun({
   useLlm: $('use-llm').checked,
+  generateLtx: $('ltx-enabled').checked,
   planOnly: true,
 }));
 
@@ -508,11 +581,45 @@ $('btn-render-existing').addEventListener('click', () => startRun({
 
 $('btn-cancel').addEventListener('click', () => api('api/cancel', { method: 'POST' }));
 
+// Shorten the MP4 that is already on disk. No re-render, and the full file is
+// left alone - this is the escape hatch for a render that finished with the
+// checkbox unticked.
+$('btn-trim-now').addEventListener('click', async () => {
+  if (!state.project || state.running) return;
+  state.running = true;
+  state.trimOnly = true;
+  setRunButtons(false);
+  setTrimStatus('Working…');
+  try {
+    // Save first: the trim reads Length and Max size from project.json, and the
+    // debounced autosave may not have landed yet.
+    await api(`api/projects/${encodeURIComponent(state.project)}/settings`,
+      { method: 'PUT', body: JSON.stringify(collectSettings()) });
+    await api(`api/projects/${encodeURIComponent(state.project)}/trim`, { method: 'POST' });
+  } catch (e) {
+    state.running = false;
+    state.trimOnly = false;
+    setRunButtons(true);
+    setTrimStatus(e.message, true);
+  }
+});
+
 $('btn-reroll').addEventListener('click', () => {
   $('seed').value = String(Math.floor(Math.random() * 100000) + 1);
   // Re-plan straight away: a new seed with no visible consequence is a
   // button that appears to do nothing.
   if (state.analysis) startRun({ useLlm: $('use-llm').checked, planOnly: true });
+  else saveSettingsSoon();
+});
+
+// Pin a different opener at random. Same reasoning as Reroll: without the
+// re-plan the choice has no visible consequence and the button looks dead.
+$('btn-opener-surprise').addEventListener('click', () => {
+  const sel = $('opening-effect');
+  const ids = [...sel.options].map((o) => o.value).filter((v) => v && v !== sel.value);
+  if (!ids.length) return;
+  sel.value = ids[Math.floor(Math.random() * ids.length)];
+  if (state.analysis && !state.running) startRun({ useLlm: $('use-llm').checked, planOnly: true });
   else saveSettingsSoon();
 });
 
@@ -522,12 +629,14 @@ for (const b of document.querySelectorAll('#aspect button')) {
   b.addEventListener('click', () => {
     for (const o of document.querySelectorAll('#aspect button')) o.classList.remove('active');
     b.classList.add('active');
+    // Effects declare which aspects they support, so the pool changes with it.
+    populateOpeners(b.dataset.value, $('opening-effect').value);
     saveSettingsSoon();
   });
 }
 
-for (const id of ['fps', 'encoder', 'crf', 'supersample', 'seed', 'bpm-override',
-                  'trim-enabled', 'trim-minutes', 'trim-mb',
+for (const id of ['fps', 'encoder', 'crf', 'supersample', 'seed', 'random-seed', 'bpm-override',
+                  'opening-effect', 'trim-enabled', 'trim-minutes', 'trim-mb',
                   'ltx-enabled', 'ltx-count', 'ltx-init', 'ltx-enhance']) {
   $(id).addEventListener('change', saveSettingsSoon);
 }
@@ -548,4 +657,8 @@ function fmtTime(s) {
 // ------------------------------------------------------------------ boot
 
 buildStages();
-refreshProjects().catch((e) => showWarnings([e.message], true));
+// Effects first: the project's settings are applied to the panel as soon as it
+// loads, and the opening-effect dropdown has to have its options by then.
+loadEffects()
+  .then(refreshProjects)
+  .catch((e) => showWarnings([e.message], true));

@@ -1,0 +1,40 @@
+{
+  "id": "sinemelt",
+  "name": "Sine melt",
+  "kind": "scene2d",
+  "tags": ["psychedelic", "retro", "abstract", "organic", "dream", "warm"],
+  "energyRange": [0.1, 0.7],
+  "cost": "medium",
+  "description": "A coordinate melted through forty passes of accumulating sine displacement. Liquid, slow and slightly seasick - the 70s light-show end of the library.",
+  "shader": "shader.frag",
+  "params": {
+    "speed": {
+      "type": "float",
+      "default": "1.25 + 0.5*rms",
+      "min": 0.1,
+      "max": 4.0,
+      "description": "Rate of the melt."
+    },
+    "passes": {
+      "type": "float",
+      "default": "40.0",
+      "min": 4.0,
+      "max": 60.0,
+      "description": "Displacement iterations. Fewer reads as ripples, more as full liquefaction."
+    },
+    "swirl": {
+      "type": "float",
+      "default": "1.0 + 0.35*lowMid",
+      "min": 0.0,
+      "max": 2.5,
+      "description": "Strength of the per-pass displacement."
+    },
+    "vignette": {
+      "type": "float",
+      "default": "5.0",
+      "min": 0.0,
+      "max": 12.0,
+      "description": "How hard the frame darkens at the edges."
+    }
+  }
+}

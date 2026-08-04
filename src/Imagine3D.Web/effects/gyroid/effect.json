@@ -1,0 +1,47 @@
+{
+  "id": "gyroid",
+  "name": "Gyroid",
+  "kind": "raymarch",
+  "tags": ["geometric", "structure", "abstract", "organic", "psychedelic", "showcase"],
+  "energyRange": [0.2, 0.85],
+  "cost": "high",
+  "description": "Flight through two interlocking gyroid surfaces, lit and reflective. The minimal surface is a lattice and a membrane at the same time, so it reads as architecture that grew rather than was built.",
+  "shader": "shader.frag",
+  "params": {
+    "speed": {
+      "type": "float",
+      "default": "0.5 + 0.35*rms",
+      "min": 0.0,
+      "max": 2.5,
+      "description": "Forward flight speed through the lattice."
+    },
+    "sway": {
+      "type": "float",
+      "default": "1.0",
+      "min": 0.0,
+      "max": 3.0,
+      "description": "How far the camera rolls and looks around while it travels."
+    },
+    "reflect": {
+      "type": "float",
+      "default": "0.9",
+      "min": 0.0,
+      "max": 1.0,
+      "description": "Reflection strength on the second bounce. At 0 the surfaces go matte."
+    },
+    "fog": {
+      "type": "float",
+      "default": "0.008",
+      "min": 0.0,
+      "max": 0.05,
+      "description": "How quickly distance swallows the lattice."
+    },
+    "tint": {
+      "type": "float",
+      "default": "0.7",
+      "min": 0.0,
+      "max": 1.0,
+      "description": "Blend the two surface albedos toward the project palette."
+    }
+  }
+}

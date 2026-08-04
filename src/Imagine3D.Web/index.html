@@ -89,6 +89,21 @@
             </div>
           </label>
           <label class="check">
+            <input id="random-seed" type="checkbox" checked>
+            <span>New random seed each run</span>
+          </label>
+          <p class="hint">On every generate and every re-plan rolls a fresh seed.</p>
+          <label class="field"><span>Opening effect</span>
+            <div class="row">
+              <select id="opening-effect" title="What the first scene uses">
+                <option value="">Auto — director picks</option>
+              </select>
+              <button id="btn-opener-surprise" class="ghost"
+                      title="Pin a different opener at random and re-plan">Surprise</button>
+            </div>
+          </label>
+          <p class="hint">The opening is where the director has least to go on.</p>
+          <label class="check">
             <input id="trim-enabled" type="checkbox">
             <span>Also save a shortened copy</span>
           </label>
@@ -98,10 +113,13 @@
           <label class="field"><span>Max size (MB)</span>
             <input id="trim-mb" type="number" min="0" max="4000" step="5" value="0" placeholder="0 = no limit">
           </label>
+          <div class="row">
+            <button id="btn-trim-now" class="ghost" disabled
+                    title="Shorten the MP4 already in the output folder, using the length and size above — no re-render">Make copy from existing MP4</button>
+          </div>
+          <p id="trim-status" class="hint"></p>
           <p class="hint">Written next to the full render as
-             <code>…_4min.mp4</code>; the full version is always kept. With no
-             size limit it is a stream copy and costs nothing. Set a limit and it
-             re-encodes two-pass to land under it — a few minutes of CPU.</p>
+             <code>…_4min.mp4</code>; the full version is always kept.</p>
         </div>
 
         <div class="panel">
@@ -142,7 +160,7 @@
         <div class="actions">
           <button id="btn-analyze" class="primary">Analyse audio</button>
           <button id="btn-plan" class="primary" disabled
-                  title="Choose scenes and effects again without rendering — seconds instead of minutes">Redo storyboard</button>
+                  title="Choose scenes and effects again without rendering — seconds, unless LTX is on and clips have to be generated for the new plan">Redo storyboard</button>
           <button id="btn-generate" class="primary accent" disabled>Generate video</button>
           <button id="btn-render-existing" class="ghost" disabled
                   title="Render plan/storyboard.json exactly as it is on disk">Render this storyboard</button>
