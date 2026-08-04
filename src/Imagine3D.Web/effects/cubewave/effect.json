@@ -1,0 +1,22 @@
+{
+  "id": "cubewave",
+  "name": "Cube wave",
+  "kind": "raymarch",
+  "tags": ["geometric", "structure", "mechanical", "retro", "abstract", "showcase", "high-energy", "cosmic"],
+  "energyRange": [0.3, 1.0],
+  "aspects": ["16:9", "9:16"],
+  "cost": "high",
+  "rarity": 0.85,
+  "description": "Concentric rings of rounded cubes spiralling away down a funnel, sized by a wave travelling outward through the rings. Built in polar space, so one distance function produces every ring at once and the count grows with radius on its own.",
+  "shader": "shader.frag",
+  "params": {
+    "speed": { "type": "float", "default": "0.8 + 0.7*energy", "min": 0, "max": 3 },
+    "rings": { "type": "float", "default": "5.0", "min": 2, "max": 8,
+               "description": "Ring families evaluated per step. More fills the funnel deeper and costs proportionally." },
+    "size": { "type": "float", "default": "0.4 + 0.15*bass", "min": 0.1, "max": 0.8,
+              "description": "Cube size at the crest of the wave." },
+    "wave": { "type": "float", "default": "1.0", "min": 0, "max": 3,
+              "description": "Rate the size wave travels outward through the rings." },
+    "steps": { "type": "float", "default": "56.0", "min": 24, "max": 90 }
+  }
+}

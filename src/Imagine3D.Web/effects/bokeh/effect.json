@@ -1,0 +1,22 @@
+{
+  "id": "bokeh",
+  "name": "Bokeh defocus",
+  "kind": "post",
+  "tags": ["soft", "dream", "cinematic", "glow", "calm", "intimate", "resolve"],
+  "energyRange": [0.0, 0.7],
+  "aspects": ["16:9", "9:16"],
+  "cost": "medium",
+  "conflicts": ["pixelate"],
+  "description": "Throws the frame out of focus on a golden-angle spiral, so 40 taps cover the aperture disc evenly instead of clumping on an axis. Highlights bloom into discs rather than smearing. The focal plane is a band across the frame that drifts, so something is always sharp.",
+  "shader": "shader.frag",
+  "params": {
+    "radius": { "type": "float", "default": "0.55 + 0.35*rms", "min": 0, "max": 2,
+                "description": "Aperture size — how far out of focus the blurred region goes." },
+    "focus": { "type": "float", "default": "0.5 + 0.25*sin(0.15*t)", "min": 0, "max": 1,
+               "description": "Where the sharp band sits, 0 bottom to 1 top." },
+    "depth": { "type": "float", "default": "0.45", "min": 0.02, "max": 1.5,
+               "description": "Width of the sharp band. Large values keep the whole frame in focus." },
+    "bloom": { "type": "float", "default": "0.6", "min": 0, "max": 2,
+               "description": "Extra weight given to bright taps, which is what turns highlights into discs." }
+  }
+}
