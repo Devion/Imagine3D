@@ -45,8 +45,9 @@ POST /api/projects/<name>/generate   {"useExistingStoryboard": true}
 ```
 
 Swap an `effectId`, change a parameter expression, delete a scene, retune a
-`blend`, then re-render. Without this the director would overwrite the edit on
-the way past.
+`blend`, then re-render. A plain **Generate** also renders what is on disk —
+this is the stricter form, which additionally skips the LTX stage and never
+re-plans, whatever the settings say.
 
 **Trimmed copy.** `saveTrimmedCopy` writes a shortened version alongside the full
 render — `song_16x9_4min.mp4` — for platforms with a length or size cap. The full
@@ -127,13 +128,24 @@ buttons, and the equivalent API calls:
 
 | Button | Body | What runs |
 |---|---|---|
-| **Redo storyboard** | `{"planOnly": true}` | analyse → intent → director, writes `storyboard.json`, stops |
-| **Render this storyboard** | `{"useExistingStoryboard": true}` | renders the file on disk verbatim |
-| **Generate video** | `{}` | the whole chain |
+| **Analyse audio** | `POST .../analyze?useLlm=` | analyse → intent → director, writes `storyboard.json` |
+| **Redo storyboard** | `{"planOnly": true}` | intent → director again, writes `storyboard.json`, stops |
+| **Render this storyboard** | `{"useExistingStoryboard": true}` | renders the file on disk verbatim, LTX stage skipped |
+| **Generate video** | `{}` | LTX → render → encode, using the plan on disk |
+
+**Generate renders the storyboard on screen.** It only calls the director when
+there is no plan yet, or when the one on disk stopped describing this video —
+a different aspect or fps, a song of a different length, a seed typed by hand.
+Nothing downstream of the director (encoder, CRF, trim) is grounds for a
+re-plan, so a list you have read and hand-edited is the list that gets rendered.
 
 *Reroll* bumps the seed and re-plans immediately, so a new seed has a visible
 consequence. The normal loop is: reroll or re-plan until the scene list reads
 well, then render once.
+
+A fresh seed is rolled at every **plan** when `randomSeedEachRun` is on — not at
+every render, which used to mean the storyboard you were reading was rebuilt
+from a different RNG stream the moment you pressed Generate.
 
 ### Cuts and blends
 

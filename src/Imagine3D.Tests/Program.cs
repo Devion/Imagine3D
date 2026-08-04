@@ -379,8 +379,79 @@ static class Program
                 lines.Length == 5 && ordered && inRange, $"got {lines.Length} lines");
         }
 
+        // Generate renders the storyboard the user reviewed, so the rule that decides
+        // when a plan is thrown away and re-planned has to be narrow: only things that
+        // move the scenes, never a setting the director never saw.
+        {
+            var analysis = Silence(180);
+            var settings = new ProjectSettings
+            {
+                Aspect = "16:9", Fps = 30, Seed = 7, RandomSeedEachRun = false,
+            };
+            var plan = PlanOf(seed: 7, aspect: "16:9", fps: 30, duration: 180);
+
+            fail += Check("A plan of this song at these settings is reused",
+                plan.StaleBecause(settings, analysis) is null,
+                plan.StaleBecause(settings, analysis) ?? "");
+
+            fail += Check("Re-planned when the video changes shape",
+                plan.StaleBecause(new ProjectSettings
+                {
+                    Aspect = "9:16", Fps = 30, Seed = 7, RandomSeedEachRun = false,
+                }, analysis) is not null, "9:16 reused a 16:9 plan");
+
+            fail += Check("Re-planned when the frame rate changes",
+                plan.StaleBecause(new ProjectSettings
+                {
+                    Aspect = "16:9", Fps = 60, Seed = 7, RandomSeedEachRun = false,
+                }, analysis) is not null, "60 fps reused a 30 fps plan");
+
+            fail += Check("Re-planned when the song is a different length",
+                plan.StaleBecause(settings, Silence(240)) is not null,
+                "a 180s plan was reused for a 240s song");
+
+            // A seed typed by hand is a request; one rolled fresh at every plan is not
+            // something the plan on disk can disagree with.
+            fail += Check("Re-planned for a seed asked for by hand",
+                plan.StaleBecause(new ProjectSettings
+                {
+                    Aspect = "16:9", Fps = 30, Seed = 99, RandomSeedEachRun = false,
+                }, analysis) is not null, "seed 99 rendered seed 7's plan");
+
+            fail += Check("Not re-planned for the rolling seed",
+                plan.StaleBecause(new ProjectSettings
+                {
+                    Aspect = "16:9", Fps = 30, Seed = 99, RandomSeedEachRun = true,
+                }, analysis) is null, "the plan on screen was replaced by a new roll");
+
+            // Encoding settings live downstream of the director. Re-planning for one
+            // is exactly the bug this rule exists to prevent.
+            fail += Check("Not re-planned for a setting the director never saw",
+                plan.StaleBecause(new ProjectSettings
+                {
+                    Aspect = "16:9", Fps = 30, Seed = 7, RandomSeedEachRun = false,
+                    Encoder = "h264_nvenc", Crf = 24, SaveTrimmedCopy = true,
+                }, analysis) is null, "a re-encode setting threw away the plan");
+        }
+
         return fail;
     }
+
+    /// The least analysis that is still a song of a given length - enough for the
+    /// rules that only care about how long it is.
+    static AudioAnalysis Silence(double seconds) => new(
+        Duration: seconds, SampleRate: 44100, FrameRate: 100,
+        Bpm: 120, BpmConfidence: 1, BpmAlternate: 60, BpmPinned: true,
+        Beats: [], Downbeats: [], Onsets: [],
+        Sections: [new Section(0, 0, seconds, "A", 0.5, 1, [], [])],
+        Lyrics: [], BandNames: [], Rms: [], Bands: [], Onset: []);
+
+    /// A one-scene plan, standing in for whatever the director would have produced.
+    static Storyboard PlanOf(int seed, string aspect, int fps, double duration) => new(
+        Version: Storyboard.CurrentVersion, Seed: seed, Aspect: aspect, Fps: fps,
+        Duration: duration, Mood: "", Palette: "neon", Notes: "",
+        Scenes: [new StoryScene(0, 0, duration, "starnest", [], [], "cut", 0.5, "A", 0.5, "test")],
+        Texts: [], Ltx: []);
 
     static int Check(string name, bool ok, string detail)
     {

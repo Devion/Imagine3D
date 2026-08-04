@@ -448,7 +448,9 @@ function renderStoryboard(sb) {
   $('sb-meta').textContent =
     `${sb.scenes.length} scenes · palette ${sb.palette} · seed ${sb.seed}` +
     (sb.mood ? ` · ${sb.mood}` : '') +
-    (locked ? ` · ${locked} chosen by hand, kept when you re-plan` : '');
+    (locked ? ` · ${locked} chosen by hand, kept when you re-plan` : '') +
+    // The whole point of showing the list before rendering: this is the video.
+    ' · Generate renders exactly this';
 
   $('storyboard').innerHTML = sb.scenes.map((s) => `
     <div class="scene${s.locked ? ' locked' : ''}" data-index="${s.index}">
@@ -510,8 +512,8 @@ function sceneOptions(sb, scene) {
   return opts.join('');
 }
 
-/// Swap one scene's effect. Saved immediately and remembered as a hand pick, so
-/// re-planning keeps it - otherwise the next Generate would quietly undo the edit.
+/// Swap one scene's effect. Saved immediately to the plan Generate renders, and
+/// remembered as a hand pick so a later re-plan keeps it too.
 async function replaceEffect(index, effectId) {
   try {
     const scene = await api(
@@ -603,11 +605,16 @@ $('btn-analyze').addEventListener('click', async () => {
   try {
     await api(`api/projects/${encodeURIComponent(state.project)}/settings`,
       { method: 'PUT', body: JSON.stringify(collectSettings()) });
-    await api(`api/projects/${encodeURIComponent(state.project)}/analyze`, { method: 'POST' });
+    await api(`api/projects/${encodeURIComponent(state.project)}/analyze?useLlm=${
+      $('use-llm').checked}`, { method: 'POST' });
     await loadAnalysis();
-    // Analysing now plans as well, so the scenes are there to be reviewed and
-    // edited without having to render a video first.
+    // Analysing plans as well, so the scenes are there to be reviewed and edited
+    // without having to render a video first - and this is the plan Generate
+    // renders, which is why the LLM switch has to reach it too.
     await loadStoryboard();
+    // Planning is where a fresh seed gets rolled, so the panel is now showing the
+    // seed of the previous plan rather than the one on screen.
+    await refreshProject();
   } catch (e) {
     showWarnings([e.message], true);
   } finally {

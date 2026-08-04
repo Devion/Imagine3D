@@ -53,44 +53,40 @@ public sealed class GenerationPipeline(
             return reRendered;
         }
 
-        // 2. Intent ------------------------------------------------------------
-        Intent? intent = null;
-        if (options.UseLlm)
+        // 2+3. Intent and storyboard -------------------------------------------
+        // The plan on disk is the plan on screen. Analysing writes one so the scenes
+        // can be read and corrected before a minute of rendering is spent on them,
+        // and this is what renders it: planning again here made that list a preview
+        // of a video nobody was going to get - a new seed and the LLM's intent both
+        // land before the director, so the effects came out different every time.
+        //
+        // Re-planning is a thing the user asks for - Redo storyboard, Reroll - or a
+        // thing the plan itself forces by no longer describing this song at these
+        // settings. Both go through the same director as before.
+        var onDisk = LoadStoryboard(paths);
+        var reason = options.PlanOnly ? "you asked for a new plan"
+            : options.Force ? "the song was analysed again"
+            : onDisk is null ? "there is no plan yet"
+            : onDisk.StaleBecause(settings, analysis);
+
+        Storyboard storyboard;
+        if (reason is null)
         {
-            progress.Report(new StageProgress(PipelineStage.Intent, 0.1, "Asking the LLM for a visual intent"));
-            try
-            {
-                intent = await IntentPlanner.PlanAsync(paths, analysis, ct);
-                progress.Report(new StageProgress(PipelineStage.Intent, 1.0,
-                    $"\"{Trunc(intent.Mood, 60)}\" - palette {intent.Palette}"));
-            }
-            catch (Exception e)
-            {
-                // Intent is an enhancement, never a dependency. Losing it costs
-                // some thematic nuance, not the video.
-                progress.Report(new StageProgress(PipelineStage.Intent, 1.0,
-                    $"Skipped ({Trunc(e.Message, 90)}) - using the deterministic director"));
-            }
+            progress.Report(new StageProgress(PipelineStage.Intent, 1.0,
+                "Skipped - rendering the storyboard you already have"));
+            progress.Report(new StageProgress(PipelineStage.Storyboard, 1.0,
+                $"Using the {onDisk!.Scenes.Length} scenes below - seed {onDisk.Seed} " +
+                "(press Redo storyboard for a different set)"));
+            storyboard = onDisk;
         }
         else
         {
-            progress.Report(new StageProgress(PipelineStage.Intent, 1.0, "Skipped - deterministic director only"));
-        }
+            var intent = await PlanIntentAsync(paths, analysis, options.UseLlm, progress, ct);
 
-        // 3. Storyboard --------------------------------------------------------
-        // A fresh seed per run, so consecutive songs are not planned from an
-        // identical RNG stream. Saved before the director runs and echoed in the
-        // stage line: the seed in project.json is always the one the storyboard
-        // next to it was built with, which is what keeps a video reproducible.
-        // The re-render path never reaches here - it returned above, on purpose.
-        if (settings.RandomSeedEachRun)
-        {
-            settings.Seed = Random.Shared.Next(1, 1_000_000);
-            store.Save(paths, settings);
+            progress.Report(new StageProgress(PipelineStage.Storyboard, 0.2,
+                $"Choosing scenes and effects - {reason}"));
+            storyboard = Plan(paths, settings, analysis, intent, progress);
         }
-
-        progress.Report(new StageProgress(PipelineStage.Storyboard, 0.2, "Choosing scenes and effects"));
-        var storyboard = Plan(paths, settings, analysis, intent, progress);
 
         // 4. LTX ---------------------------------------------------------------
         // Ahead of the plan-only exit on purpose. The director always returns an
@@ -98,7 +94,9 @@ public sealed class GenerationPipeline(
         // every insert on the floor, and the next "Render this storyboard" then
         // produced a video with no clips in it at all. A re-plan has to place the
         // inserts, and generate any clip it does not already have, or it is not a
-        // plan of the same video.
+        // plan of the same video. A reused plan keeps the inserts it already has:
+        // the picks fall out of the scene spans, so they come back identical and
+        // the clips are all cache hits.
         if (options.GenerateLtx && settings.Ltx.Enabled)
         {
             // "render" init mode asks the page for a frame of the demo at the insert
@@ -133,6 +131,40 @@ public sealed class GenerationPipeline(
         return output;
     }
 
+    /// The LLM's read of the song, or null to leave the director to its own devices.
+    ///
+    /// Belongs to whoever is about to plan - the analyse step as much as a full run -
+    /// because intent only reaches the video through the director. Asking for it after
+    /// the plan the user is looking at was already made would either do nothing or
+    /// silently replace that plan, and both were confusing.
+    public async Task<Intent?> PlanIntentAsync(
+        ProjectPaths paths, AudioAnalysis analysis, bool useLlm,
+        IProgress<StageProgress> progress, CancellationToken ct)
+    {
+        if (!useLlm)
+        {
+            progress.Report(new StageProgress(PipelineStage.Intent, 1.0, "Skipped - deterministic director only"));
+            return null;
+        }
+
+        progress.Report(new StageProgress(PipelineStage.Intent, 0.1, "Asking the LLM for a visual intent"));
+        try
+        {
+            var intent = await IntentPlanner.PlanAsync(paths, analysis, ct);
+            progress.Report(new StageProgress(PipelineStage.Intent, 1.0,
+                $"\"{Trunc(intent.Mood, 60)}\" - palette {intent.Palette}"));
+            return intent;
+        }
+        catch (Exception e)
+        {
+            // Intent is an enhancement, never a dependency. Losing it costs
+            // some thematic nuance, not the video.
+            progress.Report(new StageProgress(PipelineStage.Intent, 1.0,
+                $"Skipped ({Trunc(e.Message, 90)}) - using the deterministic director"));
+            return null;
+        }
+    }
+
     /// Run the director and write the plan to disk.
     ///
     /// Shared by the full pipeline and by the analyse step, which plans immediately so
@@ -143,6 +175,20 @@ public sealed class GenerationPipeline(
         ProjectPaths paths, ProjectSettings settings, AudioAnalysis analysis,
         Intent? intent, IProgress<StageProgress> progress)
     {
+        // A fresh seed per plan, so consecutive songs are not planned from an
+        // identical RNG stream. Saved before the director runs and echoed in the
+        // stage line: the seed in project.json is always the one the storyboard
+        // next to it was built with, which is what keeps a video reproducible.
+        //
+        // It belongs here rather than in the render run - rolling it there meant
+        // the plan the user had just reviewed was rebuilt from a different stream
+        // the moment they pressed Generate.
+        if (settings.RandomSeedEachRun)
+        {
+            settings.Seed = Random.Shared.Next(1, 1_000_000);
+            store.Save(paths, settings);
+        }
+
         var storyboard = new Director(registry.Current)
             .Build(analysis, settings, intent, LoadStoryboard(paths));
 

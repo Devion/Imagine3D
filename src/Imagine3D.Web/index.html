@@ -92,7 +92,9 @@
             <input id="random-seed" type="checkbox" checked>
             <span>New random seed each run</span>
           </label>
-          <p class="hint">On every generate and every re-plan rolls a fresh seed.</p>
+          <p class="hint">Rolls a fresh seed every time a storyboard is planned —
+            analysing, Reroll, Redo storyboard. Generate keeps the seed of the plan
+            you can see.</p>
           <label class="field"><span>Opening effect</span>
             <div class="row">
               <select id="opening-effect" title="What the first scene uses">
@@ -161,9 +163,10 @@
           <button id="btn-analyze" class="primary">Analyse audio</button>
           <button id="btn-plan" class="primary" disabled
                   title="Choose scenes and effects again without rendering — seconds, unless LTX is on and clips have to be generated for the new plan">Redo storyboard</button>
-          <button id="btn-generate" class="primary accent" disabled>Generate video</button>
+          <button id="btn-generate" class="primary accent" disabled
+                  title="Render the storyboard below — it only plans again if there is no plan yet, or the song or the video's shape has changed since">Generate video</button>
           <button id="btn-render-existing" class="ghost" disabled
-                  title="Render plan/storyboard.json exactly as it is on disk">Render this storyboard</button>
+                  title="Render plan/storyboard.json exactly as it is on disk, skipping the LTX stage as well">Render this storyboard</button>
           <button id="btn-cancel" class="ghost hidden">Cancel</button>
           <label class="check inline">
             <input id="use-llm" type="checkbox" checked>

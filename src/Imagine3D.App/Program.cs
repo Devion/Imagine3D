@@ -218,19 +218,22 @@ app.MapPost("/api/projects/{name}/import", (ProjectStore store, string name, Imp
 });
 
 app.MapPost("/api/projects/{name}/analyze",
-    async (ProjectStore store, GenerationPipeline pipeline, Session session, string name) =>
+    async (ProjectStore store, GenerationPipeline pipeline, Session session,
+           string name, bool useLlm = true, CancellationToken ct = default) =>
 {
     var paths = store.Open(name);
     var settings = store.Load(paths);
     try
     {
         var progress = session.ProgressSink();
-        var (analysis, _) = await Task.Run(() => pipeline.Analyze(paths, settings, progress));
+        var (analysis, _) = await Task.Run(() => pipeline.Analyze(paths, settings, progress), ct);
 
         // Plan straight away, so the scene list is populated and can be edited before
-        // anything is generated. No LLM intent here - that belongs to a real run, and
-        // this has to stay fast enough to sit inside the analyse button.
-        await Task.Run(() => pipeline.Plan(paths, settings, analysis, null, progress));
+        // anything is generated - and plan it the way a render would, intent included.
+        // Generate now renders this plan rather than making its own, so anything left
+        // out here is an input the user can see the effect of nowhere.
+        var intent = await pipeline.PlanIntentAsync(paths, analysis, useLlm, progress, ct);
+        await Task.Run(() => pipeline.Plan(paths, settings, analysis, intent, progress), ct);
 
         return Results.Json(analysis, Json.Options);
     }
@@ -263,9 +266,10 @@ app.MapGet("/api/projects/{name}/storyboard", (ProjectStore store, string name) 
 
 // Swap the effect on one scene of the plan on disk.
 //
-// The choice is remembered as a lock, so re-planning - Reroll, Redo storyboard, or
-// the director stage of a full Generate - keeps it. An empty id hands the scene back
-// to the director at the next plan.
+// Generate renders this file, so the edit is already what gets made. The choice is
+// also remembered as a lock, which is what carries it through a re-plan - Reroll,
+// Redo storyboard, or a Generate that had to plan again because the song or the
+// video's shape changed. An empty id hands the scene back to the director.
 app.MapPut("/api/projects/{name}/storyboard/scene/{index:int}",
     (ProjectStore store, EffectRegistryProvider registry, string name, int index, SceneEditRequest req) =>
 {

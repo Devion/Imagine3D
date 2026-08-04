@@ -1,3 +1,6 @@
+using Imagine3D.Audio;
+using Imagine3D.Projects;
+
 namespace Imagine3D.Direct;
 
 /// The contract between the director and the renderer. Fully inspectable and
@@ -19,6 +22,36 @@ public sealed record Storyboard(
     public const int CurrentVersion = 1;
 
     public int TotalFrames => (int)Math.Ceiling(Duration * Fps);
+
+    /// Why this plan no longer describes the given song at the given settings, or
+    /// null when it still does and can simply be rendered.
+    ///
+    /// This is what lets Generate render the storyboard the user is looking at
+    /// instead of quietly building another one. Only things that move the scenes
+    /// count: a different shape or frame rate of video, a song of a different
+    /// length, a seed asked for by hand. Everything else - encoder, CRF, trimming,
+    /// the LTX switches - is applied downstream of the director and changes nothing
+    /// about which effect sits where, so it must not throw away a plan that has
+    /// been reviewed and hand-edited.
+    public string? StaleBecause(ProjectSettings settings, AudioAnalysis analysis) =>
+        Version != CurrentVersion
+            ? "the plan on disk was written by an older version"
+        : Scenes.Length == 0
+            ? "the plan on disk has no scenes in it"
+        : !string.Equals(Aspect, settings.Aspect, StringComparison.OrdinalIgnoreCase)
+            ? $"the plan is {Aspect} and you asked for {settings.Aspect}"
+        : Fps != settings.Fps
+            ? $"the plan is {Fps} fps and you asked for {settings.Fps}"
+        // Sections, and so scene boundaries, are derived from the song. A different
+        // length means a different analysis, and the old spans no longer line up
+        // with the music they were chosen for.
+        : Math.Abs(Duration - analysis.Duration) > 0.25
+            ? "the song is a different length than when it was planned"
+        // With a fresh seed rolled at every plan the field is not a request, so the
+        // plan cannot be stale against it. Typed by hand it is exactly that.
+        : !settings.RandomSeedEachRun && Seed != settings.Seed
+            ? $"you asked for seed {settings.Seed}"
+        : null;
 }
 
 /// One scene: a primary visual for a span of the song, plus the post-processing
