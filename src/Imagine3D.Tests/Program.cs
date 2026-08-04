@@ -1,6 +1,9 @@
 using System.Diagnostics;
+using System.Text.Json;
 using Imagine3D.Audio;
+using Imagine3D.Direct;
 using Imagine3D.Lyrics;
+using Imagine3D.Projects;
 
 namespace Imagine3D.Tests;
 
@@ -16,6 +19,9 @@ static class Program
 
         if (args.Length > 0 && args[0] == "--trim")
             return TrimReport(args.Skip(1).ToArray());
+
+        if (args.Length > 0 && args[0] == "--variety")
+            return VarietyReport(args.Skip(1).ToArray());
 
         int failures = 0;
         failures += UnitTests();
@@ -186,6 +192,117 @@ static class Program
         Console.WriteLine(ok ? "\nPASS - under the ceiling and the right length"
                              : "\nFAIL - over the ceiling or the wrong length");
         return ok ? 0 : 1;
+    }
+
+    /// How evenly the director spends the effect library.
+    ///
+    /// Replans every project that has an analysis on disk, over a spread of seeds,
+    /// and reports what got picked. The complaint this answers is not a crash - it is
+    /// "lightning is in every video" - and the only way to see that is in aggregate,
+    /// across projects, which no single render shows.
+    ///   dotnet run --project src/Imagine3D.Tests -- --variety [seeds] [projectsRoot]
+    static int VarietyReport(string[] args)
+    {
+        int seeds = int.TryParse(args.ElementAtOrDefault(0), out var s) ? s : 8;
+        var root = args.ElementAtOrDefault(1) ?? FindProjectsRoot();
+
+        if (!Directory.Exists(root)) { Console.WriteLine($"no projects at {root}"); return 1; }
+
+        var webRoot = FindWebRoot();
+        var registry = EffectRegistry.Load(webRoot);
+        var director = new Director(registry);
+        var sceneKinds = new[] { "scene2d", "scene3d", "raymarch" };
+        var library = registry.OfKind(sceneKinds).Select(e => e.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var json = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+
+        var sceneUses = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var postUses = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        // How many of the planned videos each effect turns up in at all - the number
+        // the "it is in every video" complaint is actually about.
+        var sceneVideos = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var openers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        int totalScenes = 0, videos = 0;
+        double distinctShare = 0;
+
+        Console.WriteLine($"=== Variety over {seeds} seeds ===");
+        Console.WriteLine($"library : {library.Count} scene effects, {registry.All.Count} total");
+        Console.WriteLine($"projects: {root}\n");
+
+        foreach (var dir in Directory.EnumerateDirectories(root).OrderBy(d => d))
+        {
+            var file = Path.Combine(dir, "analysis", "analysis.json");
+            if (!File.Exists(file)) continue;
+
+            var analysis = JsonSerializer.Deserialize<AudioAnalysis>(File.ReadAllText(file), json);
+            if (analysis is null) continue;
+
+            var perProject = new List<string>();
+            for (int i = 0; i < seeds; i++)
+            {
+                // Spread the seeds rather than using 1..n: consecutive seeds are a
+                // realistic reroll, but they are not a realistic sample of the space.
+                var settings = new ProjectSettings { Seed = 1 + i * 7919, Aspect = "16:9" };
+                var sb = director.Build(analysis, settings, null);
+
+                videos++;
+                var ids = sb.Scenes.Select(x => x.EffectId).ToArray();
+                totalScenes += ids.Length;
+                distinctShare += ids.Distinct(StringComparer.OrdinalIgnoreCase).Count() / (double)ids.Length;
+                perProject.AddRange(ids);
+
+                Bump(openers, ids[0]);
+                foreach (var id in ids) Bump(sceneUses, id);
+                foreach (var id in ids.Distinct(StringComparer.OrdinalIgnoreCase)) Bump(sceneVideos, id);
+                foreach (var scene in sb.Scenes)
+                    foreach (var p in scene.Post) Bump(postUses, p.EffectId);
+            }
+
+            Console.WriteLine($"  {Path.GetFileName(dir),-26} {perProject.Count / seeds,3} scenes/plan, " +
+                              $"{perProject.Distinct(StringComparer.OrdinalIgnoreCase).Count(),3} distinct across seeds");
+        }
+
+        if (videos == 0) { Console.WriteLine("\nno analyses found"); return 1; }
+
+        Console.WriteLine($"\n{videos} plans, {totalScenes} scenes");
+        Console.WriteLine($"  distinct effects within one plan : {distinctShare / videos:P0} of its scenes");
+
+        var ranked = sceneUses.OrderByDescending(kv => kv.Value).ToArray();
+        double top4 = ranked.Take(4).Sum(kv => kv.Value) / (double)totalScenes;
+        Console.WriteLine($"  share carried by the top 4       : {top4:P0}");
+        var unused = library.Where(id => !sceneUses.ContainsKey(id)).OrderBy(x => x).ToArray();
+        Console.WriteLine($"  scene effects never picked       : {(unused.Length == 0 ? "none" : string.Join(", ", unused))}");
+
+        Console.WriteLine("\n  effect            scenes   share   in plans   opens");
+        foreach (var (id, uses) in ranked)
+            Console.WriteLine($"  {id,-16} {uses,6} {uses / (double)totalScenes,7:P1} " +
+                              $"{sceneVideos.GetValueOrDefault(id) / (double)videos,9:P0} " +
+                              $"{openers.GetValueOrDefault(id),7}");
+
+        int totalPost = postUses.Values.Sum();
+        Console.WriteLine("\n  post              uses     share");
+        foreach (var (id, uses) in postUses.OrderByDescending(kv => kv.Value))
+            Console.WriteLine($"  {id,-16} {uses,6} {uses / (double)Math.Max(1, totalPost),7:P1}");
+
+        return 0;
+
+        static void Bump(Dictionary<string, int> d, string k) => d[k] = d.GetValueOrDefault(k) + 1;
+    }
+
+    /// Both roots are found the same way the app finds them: walk up for the solution.
+    static string FindProjectsRoot() => Path.Combine(SolutionDir(), "projects");
+    static string FindWebRoot() => Path.Combine(SolutionDir(), "src", "Imagine3D.Web");
+
+    static string SolutionDir()
+    {
+        foreach (var start in new[] { AppContext.BaseDirectory, Directory.GetCurrentDirectory() })
+        {
+            var dir = new DirectoryInfo(start);
+            for (int i = 0; i < 8 && dir is not null; i++, dir = dir.Parent)
+                if (File.Exists(Path.Combine(dir.FullName, "Imagine3D.slnx")))
+                    return dir.FullName;
+        }
+        return Directory.GetCurrentDirectory();
     }
 
     static int UnitTests()

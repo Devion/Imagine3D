@@ -6,6 +6,7 @@
   "energyRange": [0.5, 1.0],
   "aspects": ["16:9", "9:16"],
   "cost": "medium",
+  "rarity": 0.1,
   "description": "Branching electric arcs that strike on transients and leave a decaying afterglow. Bolt paths are noise-displaced lines, so they fork differently every hit.",
   "shader": "shader.frag",
   "params": {

@@ -1,0 +1,24 @@
+{
+  "id": "lyricglass",
+  "name": "Lyric glass",
+  "kind": "post",
+  "tags": ["text", "glow", "dream", "abstract", "intimate", "cinematic", "soft"],
+  "energyRange": [0.0, 1.0],
+  "aspects": ["16:9", "9:16"],
+  "cost": "medium",
+  "rarity": 0.7,
+  "description": "Turns the lyric line into a slab of molten glass laid over the scene: the frame refracts through the letter shapes with chromatic fringing, a rim lights their edges, and heat shimmers off them in rings. It does not draw the text itself — the lyric pass still does that on top — so the words stay readable and gain a body. With no line on screen it passes the frame through untouched.",
+  "shader": "shader.frag",
+  "params": {
+    "refract": { "type": "float", "default": "0.9 + 0.5*bass", "min": 0, "max": 3,
+                 "description": "How hard the scene bends through the glyph edges." },
+    "spread": { "type": "float", "default": "1.0", "min": 0.2, "max": 3,
+                "description": "Radius of the thickness field, in fractions of the frame — how far the glass extends past the letters." },
+    "rim": { "type": "float", "default": "0.8 + 0.5*beatPulse", "min": 0, "max": 3 },
+    "glow": { "type": "float", "default": "0.5 + 0.4*high", "min": 0, "max": 2 },
+    "shimmer": { "type": "float", "default": "0.7", "min": 0, "max": 2,
+                 "description": "Concentric heat ripple radiating off the letters." },
+    "cue": { "type": "float", "default": "cueT", "min": 0, "max": 1,
+             "description": "0..1 through the current line's lifetime; the glass swells as the line lands." }
+  }
+}

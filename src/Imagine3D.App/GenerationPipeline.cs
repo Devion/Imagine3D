@@ -90,12 +90,7 @@ public sealed class GenerationPipeline(
         }
 
         progress.Report(new StageProgress(PipelineStage.Storyboard, 0.2, "Choosing scenes and effects"));
-        var storyboard = new Director(registry.Current).Build(analysis, settings, intent);
-        File.WriteAllText(paths.StoryboardFile, JsonSerializer.Serialize(storyboard, Json.Indented));
-        progress.Report(new StageProgress(PipelineStage.Storyboard, 1.0,
-            $"{storyboard.Scenes.Length} scenes, " +
-            $"{storyboard.Scenes.Sum(s => s.Post.Length)} post effects, " +
-            $"{storyboard.Texts.Length} text cues - seed {settings.Seed}"));
+        var storyboard = Plan(paths, settings, analysis, intent, progress);
 
         // 4. LTX ---------------------------------------------------------------
         // Ahead of the plan-only exit on purpose. The director always returns an
@@ -136,6 +131,45 @@ public sealed class GenerationPipeline(
 
         progress.Report(new StageProgress(PipelineStage.Done, 1.0, output));
         return output;
+    }
+
+    /// Run the director and write the plan to disk.
+    ///
+    /// Shared by the full pipeline and by the analyse step, which plans immediately so
+    /// the scene list is on screen and editable before anything is rendered - it used
+    /// to appear only once a whole video had finished encoding, which is far too late
+    /// to be worth reading.
+    public Storyboard Plan(
+        ProjectPaths paths, ProjectSettings settings, AudioAnalysis analysis,
+        Intent? intent, IProgress<StageProgress> progress)
+    {
+        var storyboard = new Director(registry.Current)
+            .Build(analysis, settings, intent, LoadStoryboard(paths));
+
+        paths.EnsureCreated();
+        File.WriteAllText(paths.StoryboardFile, JsonSerializer.Serialize(storyboard, Json.Indented));
+
+        int held = storyboard.Scenes.Count(s => s.Locked);
+        progress.Report(new StageProgress(PipelineStage.Storyboard, 1.0,
+            $"{storyboard.Scenes.Length} scenes, " +
+            $"{storyboard.Scenes.Sum(s => s.Post.Length)} post effects, " +
+            $"{storyboard.Texts.Length} text cues - seed {settings.Seed}" +
+            (held > 0 ? $" - {held} kept from your edits" : "")));
+
+        return storyboard;
+    }
+
+    /// The plan already on disk, or null. A corrupt one is not a reason to refuse to
+    /// make a new one; it only costs whichever scenes had been pinned by hand.
+    public static Storyboard? LoadStoryboard(ProjectPaths paths)
+    {
+        if (!File.Exists(paths.StoryboardFile)) return null;
+        try
+        {
+            return JsonSerializer.Deserialize<Storyboard>(
+                File.ReadAllText(paths.StoryboardFile), Json.Options);
+        }
+        catch (JsonException) { return null; }
     }
 
     /// Ask the page to draw one frame of the storyboard at time t and hand back a

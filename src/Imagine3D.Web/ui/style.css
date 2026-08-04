@@ -277,8 +277,25 @@ input[type="range"] { flex: 1; accent-color: var(--accent); }
 }
 .scene .idx { color: var(--muted); font-variant-numeric: tabular-nums; }
 .scene .time { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 11.5px; }
-.scene .eff { font-weight: 600; }
 .scene .meta { color: var(--muted); font-size: 11.5px; }
+
+/* A hand-picked scene is kept across re-plans, so it has to look different from
+   one the director will choose again the next time it runs. */
+.scene.locked { border-left-color: var(--warn); }
+
+.scene .eff-pick {
+  font-weight: 600;
+  font-size: 12.5px;
+  color: inherit;
+  background: #1a2231;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  padding: 1px 4px;
+  max-width: 22em;
+  cursor: pointer;
+}
+.scene .eff-pick:hover, .scene .eff-pick:focus { border-color: var(--accent); outline: none; }
+.scene.locked .eff-pick { border-color: var(--warn); }
 .scene .chips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 3px; }
 .scene .chip {
   font-size: 10.5px; padding: 1px 7px; border-radius: 999px;

@@ -8,6 +8,10 @@ namespace Imagine3D.Direct;
 /// the same video, and "reroll" is an explicit bump of that seed.
 public sealed class Director(EffectRegistry registry)
 {
+    /// Kinds that can carry a scene. Post, transition and text effects are layers
+    /// over one, never the thing itself.
+    public static readonly string[] SceneKinds = ["scene2d", "scene3d", "raymarch"];
+
     /// Sections shorter than this get folded into their neighbour - a 3-second
     /// scene reads as a glitch, not as a scene.
     const double MinSceneSeconds = 6.0;
@@ -15,16 +19,37 @@ public sealed class Director(EffectRegistry registry)
     /// How many scenes must pass before an effect may be reused.
     const int RepeatWindow = 4;
 
-    /// A flat cost per previous use of an effect, which never decays.
+    /// Cost of reusing an effect, charged as ReuseCost * uses^2 and never decaying.
     ///
     /// The repeat window above only keeps an effect off the screen it just left. On
     /// its own it did not produce variety, it produced a rotation: the moment the
     /// best-scoring effect aged out of the window it was the best-scoring effect
-    /// again, so four or five ids took turns for an entire video. Measured over the
-    /// projects in this repo, four effects carried 53% of all scenes and a third of
-    /// the library was never picked once. A cost that does not decay means carrying
-    /// a fifth scene is genuinely expensive, so the pick keeps moving outward.
-    const double ReuseCost = 1.1;
+    /// again, so four or five ids took turns for an entire video.
+    ///
+    /// A flat per-use cost was the first fix and it was not enough either - at 1.1 a
+    /// point of tag or energy advantage simply bought the leader another two scenes,
+    /// and the worst storyboards in this repo still spent 25 scenes on 12 effects.
+    /// Squaring it makes each additional scene cost more than the last: a second use
+    /// is cheap, a fourth is most of a point of advantage, a sixth is out of reach
+    /// unless the eligible pool is genuinely that small - in which case every
+    /// candidate pays the same and the term cancels out of the sampler, which is the
+    /// behaviour a short library wants.
+    const double ReuseCost = 0.75;
+
+    /// Half-width of the per-project cast bias, in score units.
+    ///
+    /// See BuildCast. Wide enough to move an effect several places up or down the
+    /// ranking for one video, not so wide that it overrules the energy gate.
+    const double CastSpread = 1.3;
+
+    /// What a tag the director inferred from energy alone is worth, relative to one
+    /// the song actually asked for. See BuildTags.
+    const double DerivedTagWeight = 0.3;
+
+    /// How many recent picks the family term compares against, and what a candidate
+    /// sharing all of its tags with the scene just gone costs. See Score.
+    const int SimilarWindow = 3;
+    const double SimilarCost = 2.4;
 
     /// Spread of the weighted sampler, in score units.
     ///
@@ -37,10 +62,19 @@ public sealed class Director(EffectRegistry registry)
     /// rest of the library appear. Still seeded, so a project renders the same way twice.
     const double Temperature = 0.9;
 
-    public Storyboard Build(AudioAnalysis analysis, ProjectSettings settings, Intent? intent)
+    /// `previous` is the plan already on disk, if any. Only its hand-picked scenes are
+    /// read from it - everything else is chosen fresh - so re-planning stays a re-plan
+    /// rather than an edit of the last one.
+    public Storyboard Build(
+        AudioAnalysis analysis, ProjectSettings settings, Intent? intent,
+        Storyboard? previous = null)
     {
         intent ??= Intent.Empty;
         var rng = new Random(settings.Seed);
+
+        // Drawn from its own stream, so which effects this project favours does not
+        // shift every later draw when the scoring around it is tuned.
+        var cast = BuildCast(new Random(settings.Seed ^ 0x5EED));
 
         var sections = MergeShort(analysis.Sections, analysis.Duration);
         var scenes = new List<StoryScene>();
@@ -48,8 +82,7 @@ public sealed class Director(EffectRegistry registry)
         var recentPost = new List<string>();
         var recentTransitions = new List<string>();
 
-        var sceneKinds = new[] { "scene2d", "scene3d", "raymarch" };
-        var candidates = registry.OfKind(sceneKinds)
+        var candidates = registry.OfKind(SceneKinds)
             .Where(e => e.SupportsAspect(settings.Aspect))
             .ToList();
 
@@ -70,12 +103,20 @@ public sealed class Director(EffectRegistry registry)
             // the pinned id goes into `recent` and reweights every later scene,
             // so roughly half the storyboard still moves. Pinning the opener is
             // not a way to keep the rest of a plan you liked.
-            var pick = PickScene(candidates, tags, intensity, recent, rng);
-            var pinned = i == 0 ? FindOpener(candidates, settings.OpeningEffect) : null;
-            if (pinned is not null) pick = pinned;
+            var pick = PickScene(candidates, tags, intensity, recent, cast, rng);
+
+            // A scene the user picked by hand outranks the opening-effect setting:
+            // both are the user's intent, but one is about this scene of this plan
+            // and the other is a standing preference about first impressions.
+            var held = FindLocked(previous, i, sec, candidates);
+            var pinned = held is null && i == 0
+                ? FindOpener(candidates, settings.OpeningEffect)
+                : null;
+            if (held is not null) pick = held;
+            else if (pinned is not null) pick = pinned;
             recent.Add(pick.Id);
 
-            var post = PickPost(pick, tags, intensity, settings.Aspect, recentPost, rng);
+            var post = PickPost(pick, tags, intensity, settings.Aspect, recentPost, cast, rng);
 
             double prevEnergy = i > 0 ? sections[i - 1].Energy : 0;
             double delta = intensity - prevEnergy;
@@ -86,7 +127,7 @@ public sealed class Director(EffectRegistry registry)
             var blend = PickBlend(i, sec, pick, candidates, delta, intensity, rng);
             var (transition, transitionDur) = blend is not null
                 ? ("fade", 0.0)   // the blend's own ramp is the transition
-                : PickTransition(i, sec, delta, recentTransitions, rng);
+                : PickTransition(i, sec, delta, recentTransitions, cast, rng);
             if (blend is null) recentTransitions.Add(transition);
 
             scenes.Add(new StoryScene(
@@ -100,9 +141,12 @@ public sealed class Director(EffectRegistry registry)
                 TransitionDuration: transitionDur,
                 SectionLabel: sec.Label,
                 Energy: Math.Round(intensity, 3),
-                Why: (pinned is not null ? "pinned as the opening effect" : Explain(pick, tags, intensity))
+                Why: (held is not null ? "chosen by hand"
+                      : pinned is not null ? "pinned as the opening effect"
+                      : Explain(pick, tags, intensity))
                      + (blend is null ? "" : $" - blended ({blend.Mode})"),
-                Blend: blend));
+                Blend: blend,
+                Locked: held is not null));
         }
 
         var texts = BuildTexts(analysis, sections);
@@ -155,22 +199,63 @@ public sealed class Director(EffectRegistry registry)
         return outp.Select((s, i) => s with { Index = i }).ToArray();
     }
 
-    static string[] BuildTags(Section sec, SectionIntent? si, Intent intent)
+    /// A tag the section is asking for, and how much a candidate naming it earns.
+    readonly record struct TagWeight(string Tag, double Weight);
+
+    static TagWeight[] BuildTags(Section sec, SectionIntent? si, Intent intent)
     {
-        var tags = new List<string>();
-        void Add(IEnumerable<string> t) { foreach (var x in t) if (!tags.Contains(x)) tags.Add(x); }
+        var tags = new List<TagWeight>();
+        void Add(IEnumerable<string> t, double weight = 1.0)
+        {
+            foreach (var x in t)
+                if (!tags.Any(e => e.Tag.Equals(x, StringComparison.OrdinalIgnoreCase)))
+                    tags.Add(new TagWeight(x, weight));
+        }
 
         if (si is not null) Add(si.Tags);
         Add(intent.GlobalTags);
         Add(TagInference.FromMarkers(sec.Markers));
         Add(TagInference.FromText(sec.Lyrics));
 
-        // Energy always contributes, so a section with no words still steers.
-        if (sec.Energy > 0.72) Add(["high-energy", "aggressive"]);
-        else if (sec.Energy < 0.32) Add(["calm", "sparse"]);
+        // Energy always contributes, so a section with no words still steers - but
+        // it contributes at a fraction of a real tag, because the section's energy is
+        // already scored on its own and scored heavily.
+        //
+        // At full weight these four words were the whole reason two effects appeared
+        // in every video in this repo. `lightning` is the only scene effect naming
+        // both "high-energy" and "aggressive", and `copperbars` one of very few naming
+        // both "calm" and "sparse", so each collected a free two-tag match on every
+        // loud (respectively quiet) section of every song - roughly a point of
+        // advantage, compounded by a sampler that is exponential in score. The music
+        // never asked for them; the director inferred them from the same number it was
+        // about to score again.
+        if (sec.Energy > 0.72) Add(["high-energy", "aggressive"], DerivedTagWeight);
+        else if (sec.Energy < 0.32) Add(["calm", "sparse"], DerivedTagWeight);
 
         return tags.ToArray();
     }
+
+    /// A per-project bias for every effect in the library.
+    ///
+    /// Every other term is a property of the effect and the section and nothing else,
+    /// so the same effect won the same kind of section in every song: measured over
+    /// the 17 projects in this repo, `lightning` appeared in 17 of 17 and `copperbars`
+    /// opened 7 of them, while five scene effects were never picked at all. The
+    /// weighted sampler cannot fix that on its own - it draws from an identical
+    /// distribution every time, so a candidate half a point ahead is favoured in every
+    /// video rather than in half of them.
+    ///
+    /// Giving each project a cast drawn from its seed makes that half-point advantage
+    /// local: an effect that leads one video sits near the bottom of the next, and
+    /// rerolling the seed genuinely re-casts instead of reshuffling. Ordered by id so
+    /// the draw does not depend on the order the registry happened to scan folders in.
+    Dictionary<string, double> BuildCast(Random rng) =>
+        registry.All
+            .OrderBy(e => e.Id, StringComparer.Ordinal)
+            .ToDictionary(
+                e => e.Id,
+                _ => (rng.NextDouble() - 0.5) * 2 * CastSpread,
+                StringComparer.OrdinalIgnoreCase);
 
     /// The pinned opening effect, or null to let the director decide.
     ///
@@ -183,9 +268,28 @@ public sealed class Director(EffectRegistry registry)
             ? null
             : candidates.FirstOrDefault(e => e.Id.Equals(id.Trim(), StringComparison.OrdinalIgnoreCase));
 
+    /// The effect the user chose for this scene last time, if it still applies.
+    ///
+    /// Matched on both the index and the start time. A lock is a statement about a
+    /// moment in the song, not about an array slot: re-analysing can move where the
+    /// sections fall, and silently applying scene 7's pick to a different part of the
+    /// music is worse than quietly letting it go. Same for an effect that has since
+    /// been deleted or that this aspect ratio cannot render - the director just picks.
+    static EffectManifest? FindLocked(
+        Storyboard? previous, int index, Section sec, List<EffectManifest> candidates)
+    {
+        if (previous is null || index >= previous.Scenes.Length) return null;
+
+        var was = previous.Scenes[index];
+        if (!was.Locked || Math.Abs(was.Start - sec.Start) > 0.75) return null;
+
+        return candidates.FirstOrDefault(
+            e => e.Id.Equals(was.EffectId, StringComparison.OrdinalIgnoreCase));
+    }
+
     EffectManifest PickScene(
-        List<EffectManifest> candidates, string[] tags, double energy,
-        List<string> recent, Random rng)
+        List<EffectManifest> candidates, TagWeight[] tags, double energy,
+        List<string> recent, IReadOnlyDictionary<string, double> cast, Random rng)
     {
         // Energy is a hard gate, not a preference.
         //
@@ -203,7 +307,7 @@ public sealed class Director(EffectRegistry registry)
         if (eligible.Count == 0)
             eligible = candidates.OrderBy(e => e.EnergyMiss(energy)).Take(4).ToList();
 
-        var scored = eligible.Select(e => (Item: e, Score: Score(e, tags, energy, recent))).ToList();
+        var scored = eligible.Select(e => (Item: e, Score: Score(e, tags, energy, recent, cast))).ToList();
         return SampleByScore(scored, rng, Temperature);
     }
 
@@ -230,7 +334,9 @@ public sealed class Director(EffectRegistry registry)
         return scored[^1].Item;   // only reachable through floating-point drift
     }
 
-    double Score(EffectManifest e, string[] tags, double energy, List<string> recent)
+    double Score(
+        EffectManifest e, TagWeight[] tags, double energy,
+        List<string> recent, IReadOnlyDictionary<string, double> cast)
     {
         double score = 0;
 
@@ -238,7 +344,10 @@ public sealed class Director(EffectRegistry registry)
         // declares. Raw overlap rewards breadth: an effect tagged with eight
         // moods matches almost any section and crowds out focused effects, which
         // is exactly what happened when the library grew.
-        int overlap = e.Tags.Count(t => tags.Contains(t, StringComparer.OrdinalIgnoreCase));
+        double overlap = 0;
+        foreach (var t in tags)
+            if (e.Tags.Contains(t.Tag, StringComparer.OrdinalIgnoreCase))
+                overlap += t.Weight;
         score += overlap * 2.0 / Math.Sqrt(Math.Max(1, e.Tags.Length));
 
         // Energy fit. Outside the declared band the penalty is steep enough that
@@ -263,8 +372,8 @@ public sealed class Director(EffectRegistry registry)
 
         // Repetition, in two parts. The window term is about adjacency - the same
         // effect twice in a row reads as a stall - and decays with age. The reuse
-        // term is about the video as a whole and never decays, so an effect that has
-        // already carried four scenes must be a markedly better fit to carry a fifth.
+        // term is about the video as a whole and never decays, and grows faster than
+        // the count, so each further scene an effect carries costs more than the last.
         int uses = 0;
         foreach (var id in recent) if (id == e.Id) uses++;
         if (uses > 0)
@@ -273,17 +382,50 @@ public sealed class Director(EffectRegistry registry)
             if (since < RepeatWindow)
                 score -= 6.0 * (RepeatWindow - since) / RepeatWindow;
 
-            score -= ReuseCost * uses;
+            score -= ReuseCost * uses * uses;
         }
 
+        // Repetition by family, not just by id. Three fractal raymarchers in a row
+        // are three different ids and read as one effect that would not stop: the
+        // storyboards in this repo are full of kaliset into fractalpyramid into
+        // apollonian, which share five of their six tags. Charging for tag overlap
+        // with what just played is the cheapest way to say "something else now"
+        // without inventing a family field every manifest would have to maintain.
+        double crowding = 0;
+        for (int k = Math.Max(0, recent.Count - SimilarWindow); k < recent.Count; k++)
+        {
+            var prev = registry.Get(recent[k]);
+            if (prev is null || prev.Id.Equals(e.Id, StringComparison.OrdinalIgnoreCase))
+                continue;   // an exact repeat is already priced above
+
+            int age = recent.Count - k;   // 1 is the scene immediately before
+            crowding += TagSimilarity(prev.Tags, e.Tags) * (SimilarWindow + 1 - age) / SimilarWindow;
+        }
+        score -= SimilarCost * crowding;
+
         score -= 0.25 * e.CostWeight;
+
+        // What the effect itself says about how often it should appear.
+        score += e.RarityBias(Temperature);
+
+        // This project's taste. Constant for the whole video, so it tilts which
+        // effects are in the running without ever overriding the energy gate.
+        score += cast.GetValueOrDefault(e.Id);
 
         return score;
     }
 
+    /// Jaccard overlap of two tag sets, 0 (nothing in common) to 1 (identical).
+    static double TagSimilarity(string[] a, string[] b)
+    {
+        if (a.Length == 0 || b.Length == 0) return 0;
+        int shared = a.Count(t => b.Contains(t, StringComparer.OrdinalIgnoreCase));
+        return (double)shared / (a.Length + b.Length - shared);
+    }
+
     PostEffect[] PickPost(
-        EffectManifest scene, string[] tags, double energy, string aspect,
-        List<string> recent, Random rng)
+        EffectManifest scene, TagWeight[] tags, double energy, string aspect,
+        List<string> recent, IReadOnlyDictionary<string, double> cast, Random rng)
     {
         var pool = registry.OfKind("post")
             .Where(e => e.SupportsAspect(aspect))
@@ -309,7 +451,7 @@ public sealed class Director(EffectRegistry registry)
         var chosen = new List<EffectManifest>();
         while (chosen.Count < want && pool.Count > 0)
         {
-            var scored = pool.Select(e => (Item: e, Score: Score(e, tags, energy, recent))).ToList();
+            var scored = pool.Select(e => (Item: e, Score: Score(e, tags, energy, recent, cast))).ToList();
             var pick = SampleByScore(scored, rng, Temperature);
             pool.Remove(pick);
 
@@ -375,7 +517,7 @@ public sealed class Director(EffectRegistry registry)
     const int TransitionRepeatWindow = 5;
 
     /// Decays with age, so a transition used five boundaries ago is fair game, plus a
-    /// flat per-use cost that does not - see ReuseCost for why the decaying term alone
+    /// per-use cost that does not - see ReuseCost for why the decaying term alone
     /// rotates a handful of ids rather than spending the library.
     static double RepetitionPenalty(string id, List<string> recent)
     {
@@ -386,7 +528,7 @@ public sealed class Director(EffectRegistry registry)
         foreach (var r in recent) if (r == id) uses++;
 
         int since = recent.Count - 1 - last;
-        double penalty = -ReuseCost * uses;
+        double penalty = -ReuseCost * uses * uses;
         if (since < TransitionRepeatWindow)
             penalty -= 5.0 * (TransitionRepeatWindow - since) / TransitionRepeatWindow;
 
@@ -394,7 +536,8 @@ public sealed class Director(EffectRegistry registry)
     }
 
     (string Id, double Duration) PickTransition(
-        int index, Section sec, double energyDelta, List<string> recent, Random rng)
+        int index, Section sec, double energyDelta, List<string> recent,
+        IReadOnlyDictionary<string, double> cast, Random rng)
     {
         if (index == 0) return ("fadethrough", 1.4);
 
@@ -417,7 +560,9 @@ public sealed class Director(EffectRegistry registry)
                              // Without this the best-matching transition wins every
                              // comparable boundary - one shader ends up carrying
                              // half the edits and the video reads as repetitive.
-                             + RepetitionPenalty(e.Id, recent)))
+                             + RepetitionPenalty(e.Id, recent)
+                             + e.RarityBias(Temperature)
+                             + cast.GetValueOrDefault(e.Id)))
             .ToList();
 
         var pick = SampleByScore(scored, rng, Temperature);
@@ -440,9 +585,12 @@ public sealed class Director(EffectRegistry registry)
     /// A one-line reason, stored on the scene and shown in the UI. The director
     /// making an opaque choice is the thing that makes a generated video feel
     /// arbitrary; saying why it picked this scene is most of the fix.
-    static string Explain(EffectManifest e, string[] tags, double energy)
+    static string Explain(EffectManifest e, TagWeight[] tags, double energy)
     {
-        var matched = e.Tags.Where(t => tags.Contains(t, StringComparer.OrdinalIgnoreCase)).ToArray();
+        // Only the tags the song actually asked for are worth naming: the ones the
+        // director inferred from energy would have it explain the energy twice.
+        var asked = tags.Where(t => t.Weight >= 1.0).Select(t => t.Tag).ToArray();
+        var matched = e.Tags.Where(t => asked.Contains(t, StringComparer.OrdinalIgnoreCase)).ToArray();
         var band = energy > 0.7 ? "high energy" : energy < 0.35 ? "low energy" : "mid energy";
         return matched.Length > 0
             ? $"{band}, matches {string.Join("/", matched.Take(3))}"

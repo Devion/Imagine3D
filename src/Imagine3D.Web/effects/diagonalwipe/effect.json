@@ -1,0 +1,20 @@
+{
+  "id": "diagonalwipe",
+  "name": "Diagonal wipe",
+  "kind": "transition",
+  "tags": ["wipe", "geometric", "sharp", "mechanical", "impact", "retro"],
+  "energyRange": [0.2, 1.0],
+  "cost": "low",
+  "description": "A raking diagonal edge with a glowing leading line. The boundary is combed into strips that lead and lag, so it arrives as a rake of teeth rather than one straight cut, and the outgoing frame is shoved along the same axis as it goes.",
+  "shader": "shader.frag",
+  "params": {
+    "angle": { "type": "float", "default": "0.25", "min": 0, "max": 1,
+               "description": "Wipe direction, 0..1 mapped over half a turn." },
+    "chevron": { "type": "float", "default": "0.35", "min": 0, "max": 1.5,
+                 "description": "Folds the edge into a V. 0 leaves it a straight diagonal." },
+    "teeth": { "type": "float", "default": "9.0", "min": 0, "max": 40,
+               "description": "Strips the edge is combed into across its width." },
+    "stagger": { "type": "float", "default": "0.22", "min": 0, "max": 1,
+                 "description": "How far a strip may lead or lag the others." }
+  }
+}

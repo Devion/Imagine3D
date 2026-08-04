@@ -226,6 +226,12 @@ app.MapPost("/api/projects/{name}/analyze",
     {
         var progress = session.ProgressSink();
         var (analysis, _) = await Task.Run(() => pipeline.Analyze(paths, settings, progress));
+
+        // Plan straight away, so the scene list is populated and can be edited before
+        // anything is generated. No LLM intent here - that belongs to a real run, and
+        // this has to stay fast enough to sit inside the analyse button.
+        await Task.Run(() => pipeline.Plan(paths, settings, analysis, null, progress));
+
         return Results.Json(analysis, Json.Options);
     }
     catch (Exception e) { return Results.BadRequest(new { error = e.Message }); }
@@ -253,6 +259,65 @@ app.MapGet("/api/projects/{name}/storyboard", (ProjectStore store, string name) 
     return File.Exists(paths.StoryboardFile)
         ? Results.Text(File.ReadAllText(paths.StoryboardFile), "application/json")
         : Results.NotFound(new { error = "No storyboard yet." });
+});
+
+// Swap the effect on one scene of the plan on disk.
+//
+// The choice is remembered as a lock, so re-planning - Reroll, Redo storyboard, or
+// the director stage of a full Generate - keeps it. An empty id hands the scene back
+// to the director at the next plan.
+app.MapPut("/api/projects/{name}/storyboard/scene/{index:int}",
+    (ProjectStore store, EffectRegistryProvider registry, string name, int index, SceneEditRequest req) =>
+{
+    ProjectPaths paths;
+    try { paths = store.Open(name); }
+    catch (Exception e) { return Results.NotFound(new { error = e.Message }); }
+
+    var storyboard = GenerationPipeline.LoadStoryboard(paths);
+    if (storyboard is null)
+        return Results.BadRequest(new { error = "No storyboard to edit - analyse the song first." });
+    if (index < 0 || index >= storyboard.Scenes.Length)
+        return Results.BadRequest(new { error = $"This plan has no scene {index + 1}." });
+
+    var scene = storyboard.Scenes[index];
+    var wanted = req.EffectId?.Trim() ?? "";
+
+    StoryScene edited;
+    if (wanted.Length == 0)
+    {
+        // Back to auto. The effect stays on screen until the next plan, because
+        // blanking the row would say the scene has nothing to draw, which is false.
+        edited = scene with { Locked = false, Why = scene.Why + " - back to auto" };
+    }
+    else
+    {
+        var effect = registry.Current.Get(wanted);
+        if (effect is null)
+            return Results.BadRequest(new { error = $"There is no effect called \"{wanted}\"." });
+        if (!Director.SceneKinds.Contains(effect.Kind, StringComparer.OrdinalIgnoreCase))
+            return Results.BadRequest(new { error = $"\"{effect.Id}\" is a {effect.Kind}, not a scene." });
+        if (!effect.SupportsAspect(storyboard.Aspect))
+            return Results.BadRequest(new { error = $"\"{effect.Id}\" does not support {storyboard.Aspect}." });
+
+        edited = scene with
+        {
+            EffectId = effect.Id,
+            Params = effect.Params.ToDictionary(kv => kv.Key, kv => kv.Value.Default),
+            // The old scene's post stack was chosen against the old scene. Anything
+            // the manifests declare as clashing with the new one has to go, or the
+            // renderer stacks a pair the library says must never be stacked.
+            Post = scene.Post.Where(p => !Clashes(registry.Current, effect, p.EffectId)).ToArray(),
+            Why = "chosen by hand",
+            Locked = true,
+        };
+    }
+
+    var scenes = storyboard.Scenes.ToArray();
+    scenes[index] = edited;
+    var updated = storyboard with { Scenes = scenes };
+
+    File.WriteAllText(paths.StoryboardFile, JsonSerializer.Serialize(updated, Json.Indented));
+    return Results.Json(edited, Json.Options);
 });
 
 app.MapPost("/api/projects/{name}/generate",
@@ -486,9 +551,18 @@ void RunWindow()
     window.WaitForClose();
 }
 
+/// Conflicts are declared from either side, so both directions have to be checked.
+static bool Clashes(EffectRegistry registry, EffectManifest scene, string postId)
+{
+    if (scene.Conflicts.Contains(postId, StringComparer.OrdinalIgnoreCase)) return true;
+    var post = registry.Get(postId);
+    return post is not null && post.Conflicts.Contains(scene.Id, StringComparer.OrdinalIgnoreCase);
+}
+
 // ---------------------------------------------------------------- DTOs
 
 record ClientLog(string Level, string Message, string? Stack);
+record SceneEditRequest(string? EffectId);
 record CreateRequest(string Name);
 record ImportRequest(string Path);
 record GenerateRequest(

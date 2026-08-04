@@ -1,0 +1,22 @@
+{
+  "id": "chevrons",
+  "name": "Diagonal chevrons",
+  "kind": "scene2d",
+  "tags": ["geometric", "retro", "amiga", "mechanical", "sharp", "high-energy", "structure", "bright"],
+  "energyRange": [0.35, 1.0],
+  "aspects": ["16:9", "9:16"],
+  "cost": "low",
+  "rarity": 0.5,
+  "description": "Diagonal bands raking across the frame in three parallax layers, each with a hard leading edge and a trailing gloss. `chevron` folds the bars into a V; at 0 they stay straight diagonals. Speed lines stretched along the same axis sell the motion.",
+  "shader": "shader.frag",
+  "params": {
+    "angle": { "type": "float", "default": "0.25", "min": 0, "max": 1,
+               "description": "Band direction, 0..1 mapped over half a turn. 0.25 is a 45-degree rake." },
+    "freq": { "type": "float", "default": "4.0", "min": 0.5, "max": 12,
+              "description": "Bands per unit across the frame." },
+    "speed": { "type": "float", "default": "0.7 + 0.9*energy", "min": -4, "max": 4 },
+    "chevron": { "type": "float", "default": "0.55", "min": 0, "max": 2,
+                 "description": "Folds the bars into a V. 0 leaves them straight." },
+    "bright": { "type": "float", "default": "0.9 + 0.4*beatPulse", "min": 0, "max": 3 }
+  }
+}

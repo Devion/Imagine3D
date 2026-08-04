@@ -25,6 +25,19 @@ public sealed record EffectManifest
     /// low | medium | high - render cost, used to stay inside a frame budget.
     public string Cost { get; init; } = "low";
 
+    /// How much screen time this effect should get relative to how well it scores,
+    /// as a multiplier on its odds of being picked. 1 is neutral, 0.25 is a quarter
+    /// as often, 2 is twice.
+    ///
+    /// Fit and rarity are different questions and the scorer cannot answer the
+    /// second from the first. `lightning` is the library's high-energy specialist
+    /// and roughly half of every song analysed here sits above 0.8, so it correctly
+    /// won loud sections - and correctly winning them in every video is still wrong,
+    /// because it is an accent, not a scene you hold for twenty seconds. This is
+    /// where an effect says so, next to the shader, rather than the director
+    /// carrying a list of ids it has opinions about.
+    public double Rarity { get; init; } = 1.0;
+
     public Dictionary<string, EffectParam> Params { get; init; } = [];
 
     public string Description { get; init; } = "";
@@ -49,6 +62,13 @@ public sealed record EffectManifest
     public double CostWeight => Cost switch { "high" => 3, "medium" => 1.6, _ => 1 };
 
     public bool SupportsAspect(string aspect) => Aspects.Length == 0 || Aspects.Contains(aspect);
+
+    /// Rarity as a score offset. The director samples in proportion to
+    /// exp(score / temperature), so adding this multiplies the odds of being picked
+    /// by exactly Rarity - which is what makes the manifest number mean something
+    /// you can predict rather than a knob that has to be tuned by eye.
+    public double RarityBias(double temperature) =>
+        temperature * Math.Log(Math.Clamp(Rarity, 0.02, 5.0));
 
     [JsonIgnore] public double EnergyLo => EnergyRange.Length > 0 ? EnergyRange[0] : 0;
     [JsonIgnore] public double EnergyHi => EnergyRange.Length > 1 ? EnergyRange[1] : 1;

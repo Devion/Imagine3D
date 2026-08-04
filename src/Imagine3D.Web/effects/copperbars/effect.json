@@ -6,6 +6,7 @@
   "energyRange": [0.0, 0.6],
   "aspects": ["16:9", "9:16"],
   "cost": "low",
+  "rarity": 0.55,
   "description": "Polished metal raster bars sliding on sine paths, with specular highlights, additive halos and depth so they weave in front of one another. Anti-aliased, so the edges stay soft at any resolution.",
   "shader": "shader.frag",
   "params": {

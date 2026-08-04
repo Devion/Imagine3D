@@ -38,7 +38,12 @@ public sealed record StoryScene(
     /// Optional sustained blend with the previous scene. When set, the two scenes
     /// are composited together for a stretch rather than one simply replacing the
     /// other at a cut.
-    SceneBlend? Blend = null)
+    SceneBlend? Blend = null,
+
+    /// Set when the effect was chosen by hand rather than by the director. Re-planning
+    /// keeps it, so picking an effect in the UI and then pressing Generate does not
+    /// silently throw the choice away.
+    bool Locked = false)
 {
     public double Duration => End - Start;
 }

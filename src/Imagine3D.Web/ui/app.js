@@ -117,6 +117,11 @@ function onStageProgress(p) {
     }
   }
 
+  // The plan is on disk the moment its stage finishes, and the render that follows
+  // is minutes long. Showing it now rather than at the end of the run is the
+  // difference between reviewing the scenes and finding out what they were.
+  if (p.stage === 'storyboard' && done) loadStoryboard();
+
   if (p.thumbnail) {
     $('thumb').src = p.thumbnail;
     $('thumb-wrap').classList.remove('hidden');
@@ -427,20 +432,31 @@ async function loadStoryboard() {
     state.storyboard = null;
     $('storyboard-panel').classList.add('hidden');
   }
+  // "Render this storyboard" is gated on there being one. This runs after the other
+  // loaders, so without it the button reflects whichever project was open before.
+  setRunButtons(!state.running);
 }
 
 function renderStoryboard(sb) {
   $('storyboard-panel').classList.remove('hidden');
+
+  // The list scrolls, and changing an effect redraws all of it. Without this,
+  // editing scene 20 throws the view back to scene 1 every time.
+  const scroll = $('storyboard').scrollTop;
+
+  const locked = sb.scenes.filter((s) => s.locked).length;
   $('sb-meta').textContent =
     `${sb.scenes.length} scenes · palette ${sb.palette} · seed ${sb.seed}` +
-    (sb.mood ? ` · ${sb.mood}` : '');
+    (sb.mood ? ` · ${sb.mood}` : '') +
+    (locked ? ` · ${locked} chosen by hand, kept when you re-plan` : '');
 
   $('storyboard').innerHTML = sb.scenes.map((s) => `
-    <div class="scene">
+    <div class="scene${s.locked ? ' locked' : ''}" data-index="${s.index}">
       <div class="idx">${s.index + 1}</div>
       <div class="time">${fmtTime(s.start)}–${fmtTime(s.end)}</div>
       <div>
-        <span class="eff">${escapeHtml(s.effectId)}</span>
+        <select class="eff-pick" data-index="${s.index}"
+                title="Swap the effect for this scene">${sceneOptions(sb, s)}</select>
         <span class="meta"> — ${escapeHtml(s.why)} · in via ${escapeHtml(s.transitionIn)}</span>
         <div class="chips">
           ${s.post.map((p) => `<span class="chip">${escapeHtml(p.effectId)}</span>`).join('')}
@@ -449,7 +465,74 @@ function renderStoryboard(sb) {
         </div>
       </div>
     </div>`).join('');
+
+  $('storyboard').scrollTop = scroll;
 }
+
+/// The effects this scene could use instead. Ordered by whether they suit the
+/// section's energy, because that is the question the user is actually asking when
+/// they open the list - a calm effect on a peak is the one mistake worth steering
+/// away from, and the director will not make it for them here.
+function sceneOptions(sb, scene) {
+  const pool = state.effects
+    .filter((e) => SCENE_KINDS.includes(e.kind))
+    .filter((e) => !e.aspects?.length || e.aspects.includes(sb.aspect));
+
+  // The band as declared, with none of the slack the director allows itself when
+  // nothing else is eligible. This is a hint for a person choosing on purpose, and
+  // a group that holds 43 of 45 effects tells them nothing.
+  const fits = (e) => scene.energy >= (e.energyRange?.[0] ?? 0)
+                   && scene.energy <= (e.energyRange?.[1] ?? 1);
+
+  const label = (e) => `${e.name || e.id} — energy ${e.energyRange?.[0] ?? 0}–${e.energyRange?.[1] ?? 1}`;
+  const option = (e) => `<option value="${escapeHtml(e.id)}"${e.id === scene.effectId ? ' selected' : ''}
+      title="${escapeHtml(e.description ?? '')}">${escapeHtml(label(e))}</option>`;
+
+  const byName = (a, b) => (a.name || a.id).localeCompare(b.name || b.id);
+  const suited = pool.filter(fits).sort(byName);
+  const rest = pool.filter((e) => !fits(e)).sort(byName);
+
+  // The row always shows the effect the scene actually uses, chosen by hand or not -
+  // this is the scene list, and "Auto" in place of the effect would be hiding the one
+  // thing it is for. Picking Auto hands the scene back to the director.
+  const opts = [
+    '<option value="">Auto — director picks</option>',
+    suited.length ? `<optgroup label="Suits this section">${suited.map(option).join('')}</optgroup>` : '',
+    rest.length ? `<optgroup label="Outside its energy band">${rest.map(option).join('')}</optgroup>` : '',
+  ];
+
+  // An effect that is no longer in the library still has to be visible: the plan
+  // names it, the render will fail on it, and a silent Auto would hide both facts.
+  if (scene.effectId && !pool.some((e) => e.id === scene.effectId))
+    opts.push(`<option value="${escapeHtml(scene.effectId)}" selected
+      >${escapeHtml(scene.effectId)} — not available</option>`);
+
+  return opts.join('');
+}
+
+/// Swap one scene's effect. Saved immediately and remembered as a hand pick, so
+/// re-planning keeps it - otherwise the next Generate would quietly undo the edit.
+async function replaceEffect(index, effectId) {
+  try {
+    const scene = await api(
+      `api/projects/${encodeURIComponent(state.project)}/storyboard/scene/${index}`,
+      { method: 'PUT', body: JSON.stringify({ effectId }) });
+
+    if (state.storyboard) {
+      state.storyboard.scenes[index] = scene;
+      renderStoryboard(state.storyboard);
+    }
+    hideWarnings();
+  } catch (e) {
+    showWarnings([`Could not change scene ${index + 1}: ${e.message}`], true);
+    await loadStoryboard();   // put the row back to whatever is actually on disk
+  }
+}
+
+$('storyboard').addEventListener('change', (e) => {
+  const sel = e.target.closest('.eff-pick');
+  if (sel) replaceEffect(Number(sel.dataset.index), sel.value);
+});
 
 // ------------------------------------------------------------------ result
 
@@ -522,6 +605,9 @@ $('btn-analyze').addEventListener('click', async () => {
       { method: 'PUT', body: JSON.stringify(collectSettings()) });
     await api(`api/projects/${encodeURIComponent(state.project)}/analyze`, { method: 'POST' });
     await loadAnalysis();
+    // Analysing now plans as well, so the scenes are there to be reviewed and
+    // edited without having to render a video first.
+    await loadStoryboard();
   } catch (e) {
     showWarnings([e.message], true);
   } finally {
