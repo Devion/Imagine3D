@@ -62,9 +62,15 @@ float apollonian(vec3 p, float t) {
 
 float map(vec3 p, float t) {
   p.z -= 10.0;
-  // The camera orbit. A rigid rotation of the whole field, so it can afford to
-  // run several times faster than the fold above without reading as frantic.
-  p.xz *= rot(t / 3.0);
+  // The camera orbit: a rigid rotation of the whole field.
+  //
+  // Being rigid, it can run faster than the fold above without strobing - but not
+  // as much faster as `t / 3.0` assumed. What that missed is that the packing is
+  // dense: a tenth of a radian sweeps a whole generation of spheres past the
+  // frame, so at ~0.4 rad/s the structure never held still long enough to be
+  // read, and the six seconds of a short scene were spent watching detail stream
+  // by. `p_orbit` is the rate in radians per second, at the master speed.
+  p.xz *= rot(t * p_orbit);
 
   float ball = length(p) - 0.5;
 

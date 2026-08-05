@@ -1,0 +1,27 @@
+{
+  "id": "vumeter",
+  "name": "VU meters",
+  "kind": "raymarch",
+  "tags": ["retro", "mechanical", "structure", "warm", "showcase"],
+  "energyRange": [0.1, 0.8],
+  "coverage": 0.28,
+  "aspects": ["16:9", "9:16"],
+  "cost": "medium",
+  "description": "A rack unit turning slowly in a dark room over a polished floor, two moving-coil VU meters recessed into its brushed front panel behind glass. The chassis is marched; the printed scales, red zones, peak lamps and tapered needles are drawn in the panel's own coordinates wherever the ray lands, so they take real perspective and the glass over them reflects the room hard as the unit swings away. The analysis is mono, so the two meters read the low and the high half of the spectrum rather than a left and a right that do not exist.",
+  "shader": "shader.frag",
+  "params": {
+    "left": { "type": "float", "default": "0.30*sub + 0.46*bass + 0.24*lowMid + 0.12*onset", "min": 0, "max": 1.5,
+              "description": "Deflection of the left (or upper) needle, 0 to 1 across the scale. The default is a bass-weighted mix with a little onset on top, which is the overshoot a real needle has on a transient." },
+    "right": { "type": "float", "default": "0.26*lowMid + 0.42*mid + 0.32*high + 0.12*onset", "min": 0, "max": 1.5,
+               "description": "Deflection of the right (or lower) needle." },
+    "leftPeak": { "type": "float", "default": "0.30*subPeak + 0.46*bassPeak + 0.24*lowMidPeak", "min": 0, "max": 1.5,
+                  "description": "What the left peak lamp watches. Use the peak-hold sources here, not the bands: the lamp is meant to catch a transient the needle is too slow to show." },
+    "rightPeak": { "type": "float", "default": "0.26*lowMidPeak + 0.42*midPeak + 0.32*highPeak", "min": 0, "max": 1.5 },
+    "tint": { "type": "float", "default": "0.35", "min": 0, "max": 1,
+              "description": "Pulls the cream card, amber lamp and red zone toward the project palette. 0 leaves the classic hi-fi colours; 1 puts the whole panel in the video's colour world and loses most of what makes it read as a VU meter." },
+    "glow": { "type": "float", "default": "0.9 + 0.35*beatPulse", "min": 0, "max": 2,
+              "description": "Backlight behind the cards, and the haze the lit wells throw into the room in front of them." },
+    "orbit": { "type": "float", "default": "0.85", "min": 0, "max": 3.14,
+               "description": "How far the unit swings either side of facing the camera, in radians. It swings rather than spinning because a full turn would hide both faces for half of every scene; near 1.5 it goes fully edge-on at the ends of the swing, which is where the depth of the wells reads best. 0 holds it square on." }
+  }
+}

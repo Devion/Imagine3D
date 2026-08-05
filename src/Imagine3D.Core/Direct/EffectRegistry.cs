@@ -22,6 +22,23 @@ public sealed record EffectManifest
 
     public string[] Aspects { get; init; } = ["16:9", "9:16"];
 
+    /// How much of the frame this effect lights up, 0..1. `starfield` is 0.07,
+    /// `orbs` 0.27, `fractalcanyon` 0.91.
+    ///
+    /// Nothing to do with energy or quality - it is area and brightness, and it
+    /// exists because a cut from a frame that is full of light to one that is
+    /// mostly black reads as the lights going out however good the transition
+    /// is. Half the picture was never there to be wiped. The director cannot see
+    /// what an effect looks like, so this is where the effect says.
+    ///
+    /// Seeded by measuring the contact sheet - 0.6 * the fraction of the frame
+    /// meaningfully above its own darkest tenth, plus 0.4 * mean luminance - over
+    /// two palettes. Neither half is enough alone: `water` is a full-frame ripple
+    /// with almost no local contrast, `ifsmorph` a small solid on a bright wash.
+    /// Worth re-checking if a shader changes character; a rough value is far
+    /// better than the 0.6 default, which only says "no idea".
+    public double Coverage { get; init; } = 0.6;
+
     /// low | medium | high - render cost, used to stay inside a frame budget.
     public string Cost { get; init; } = "low";
 
@@ -30,12 +47,12 @@ public sealed record EffectManifest
     /// as often, 2 is twice.
     ///
     /// Fit and rarity are different questions and the scorer cannot answer the
-    /// second from the first. `lightning` is the library's high-energy specialist
-    /// and roughly half of every song analysed here sits above 0.8, so it correctly
-    /// won loud sections - and correctly winning them in every video is still wrong,
-    /// because it is an accent, not a scene you hold for twenty seconds. This is
-    /// where an effect says so, next to the shader, rather than the director
-    /// carrying a list of ids it has opinions about.
+    /// second from the first. `lightning` - since removed - was the library's
+    /// high-energy specialist, and roughly half of every song analysed here sits
+    /// above 0.8, so it correctly won loud sections; correctly winning them in
+    /// every video is still wrong, because it was an accent, not a scene you hold
+    /// for twenty seconds. This is where an effect says so, next to the shader,
+    /// rather than the director carrying a list of ids it has opinions about.
     public double Rarity { get; init; } = 1.0;
 
     public Dictionary<string, EffectParam> Params { get; init; } = [];

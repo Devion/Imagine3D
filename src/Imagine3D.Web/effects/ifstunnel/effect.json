@@ -4,6 +4,7 @@
   "kind": "raymarch",
   "tags": ["geometric", "structure", "mechanical", "psychedelic", "space", "scifi", "build", "high-energy"],
   "energyRange": [0.35, 1.0],
+  "coverage": 0.91,
   "aspects": ["16:9", "9:16"],
   "cost": "high",
   "description": "Flight through a kaleidoscopically folded lattice of boxes, accumulated as volumetric glow with pulses of brightness travelling down the tunnel. Technique after the 'Phantom Mode' family of Shadertoys.",

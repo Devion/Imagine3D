@@ -1,0 +1,25 @@
+{
+  "id": "spectrumring",
+  "name": "Spectrum ring",
+  "kind": "scene2d",
+  "tags": ["glow", "cosmic", "abstract", "structure", "showcase"],
+  "energyRange": [0.25, 1.0],
+  "coverage": 0.16,
+  "aspects": ["16:9", "9:16"],
+  "cost": "low",
+  "description": "The spectrum wrapped around a stirred core of light — radial bars with floating peak caps, a fine dial ring outside them to measure against, and pressure rings leaving the core on every bar. The frequency axis is mirrored across the circle, so the low end pumps on one axis of the frame and the top end glitters at right angles to it.",
+  "shader": "shader.frag",
+  "params": {
+    "bars": { "type": "float", "default": "72.0", "min": 8, "max": 160,
+              "description": "Radial bars around the ring. High counts read as a corona; low counts as an instrument." },
+    "inner": { "type": "float", "default": "0.30", "min": 0.08, "max": 0.7,
+               "description": "Radius of the core the bars stand on. Also sets how wide a bar is — they are spaced at the root, so a bigger core gives fatter bars." },
+    "reach": { "type": "float", "default": "0.52", "min": 0.05, "max": 1.2,
+               "description": "Length of a full-scale bar." },
+    "spin": { "type": "float", "default": "0.05 + 0.07*energy", "min": -1, "max": 1,
+              "description": "Rotation in radians per second. The bands turn with the ring, so this is the whole instrument revolving rather than the spectrum sliding around a fixed dial." },
+    "detail": { "type": "float", "default": "0.30", "min": 0, "max": 1,
+                "description": "Per-bar deviation from the six-point curve, scaled by onset." },
+    "glow": { "type": "float", "default": "1.0 + 0.6*beatPulse", "min": 0, "max": 3 }
+  }
+}

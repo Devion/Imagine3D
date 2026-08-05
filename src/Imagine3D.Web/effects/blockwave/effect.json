@@ -4,6 +4,7 @@
   "kind": "raymarch",
   "tags": ["geometric", "structure", "mechanical", "city", "urban", "showcase", "high-energy"],
   "energyRange": [0.3, 1.0],
+  "coverage": 0.52,
   "aspects": ["16:9", "9:16"],
   "cost": "high",
   "description": "A grid of 3D blocks pumping up and down with the spectrum — an equaliser rendered as a city. Rows are driven by different frequency bands, so the front pumps on the kick and the back shimmers on the highs.",

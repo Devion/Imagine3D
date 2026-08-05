@@ -1,0 +1,25 @@
+{
+  "id": "speakerstack",
+  "name": "Speaker stack",
+  "kind": "raymarch",
+  "tags": ["mechanical", "structure", "industrial", "high-energy", "showcase"],
+  "energyRange": [0.45, 1.0],
+  "coverage": 0.50,
+  "rarity": 0.75,
+  "aspects": ["16:9", "9:16"],
+  "cost": "high",
+  "description": "A canyon walled on both sides with speaker drivers, flown down the middle over a wet floor — paper cones with rubber surrounds and cast baskets, every one lit, specular and pumping, with the air between the walls carrying the light off them. The walls are tuned like a real stack: sub and bass along the floor on the big cones, air at the top on the small ones, so the music is divided over the canyon rather than every cone doing the same thing at once.",
+  "shader": "shader.frag",
+  "params": {
+    "flow": { "type": "float", "default": "1.8 + 2.4*energy", "min": 0, "max": 12,
+              "description": "How fast the camera flies down the canyon, in cabinet widths per second. 0 holds it still and the walls only pump." },
+    "pitch": { "type": "float", "default": "0.75", "min": 0.25, "max": 1.6,
+               "description": "Driver spacing, so this is really how big the drivers are and therefore how far away the walls read as being. Small values give a wall of tweeters and a much busier frame." },
+    "throw": { "type": "float", "default": "1.0 + 0.6*bass", "min": 0, "max": 2.5,
+               "description": "Excursion. Cones sit out at their band's level and then ring at a few hertz after a hit; at 0 the walls are still and only the light moves." },
+    "tint": { "type": "float", "default": "0.55", "min": 0, "max": 1,
+              "description": "How much of the project palette the cones and dust caps take. 0 leaves them grey paper lit by the room." },
+    "glow": { "type": "float", "default": "1.0 + 0.5*beatPulse", "min": 0, "max": 3,
+              "description": "Strength of the haze the lit cones throw into the canyon. This is the difference between a photograph of speakers and a room with speakers in it." }
+  }
+}

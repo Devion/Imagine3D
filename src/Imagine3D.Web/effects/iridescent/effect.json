@@ -4,6 +4,7 @@
   "kind": "raymarch",
   "tags": ["psychedelic", "dream", "glow", "organic", "abstract", "fluid", "cosmic", "soft"],
   "energyRange": [0.15, 0.85],
+  "coverage": 0.29,
   "aspects": ["16:9", "9:16"],
   "cost": "high",
   "rarity": 0.8,

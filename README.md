@@ -5,7 +5,7 @@ scene, effect and transition from the audio and the lyrics — you supply the so
 
 - **.NET 10** backend, **Photino** desktop window, **WebGL2** render engine.
 - Audio analysis (BPM, beats, bars, sections, six-band VU) is written in C#, no Python.
-- **60 effects**, each one folder. Adding one needs no code changes anywhere else.
+- **90 effects**, each one folder. Adding one needs no code changes anywhere else.
 - Lyrics are timed against the actual vocal by Whisper forced alignment.
 - Scenes **blend** as well as cut — 15 transitions plus sustained layering.
 - Renders **1080p at ~50–68 fps** on an RTX 5090 — a 5:42 song encodes in about 3 minutes.
@@ -108,8 +108,9 @@ detected sections and says so.
 `energyRange` in a manifest is a **hard gate**, not a preference. An effect that
 declares `[0.5, 1.0]` cannot be chosen for a section at energy 0.2 no matter how
 well its tags match — it was one weighted term among several, and a broadly
-tagged effect could out-argue it, which is how `lightning` ended up over a quiet
-passage. Only if nothing in the library covers an energy does the gate widen.
+tagged effect could out-argue it, which is how a `[0.5, 1.0]` shader ended up
+over a quiet passage. Only if nothing in the library covers an energy does the
+gate widen.
 
 Inside the band, being near its middle scores higher, and a *narrow* band scores
 higher than a wide one — declaring `[0.5, 0.7]` is a specific claim about where
@@ -212,10 +213,18 @@ effects/plasma/
 {
   "id": "plasma", "name": "Plasma", "kind": "scene2d",
   "tags": ["amiga", "retro", "psychedelic"],
-  "energyRange": [0.1, 0.7], "cost": "low",
+  "energyRange": [0.1, 0.7], "coverage": 0.48, "cost": "low",
   "params": { "scale": { "type": "float", "default": "2.4 + 0.8*beatPulse" } }
 }
 ```
+
+`coverage` is how much of the frame the effect lights up, 0..1 — `starfield` is
+0.07, `orbs` 0.27, `fractalcanyon` 0.91. It has nothing to do with energy or
+quality. It exists because cutting from a frame full of light to one that is
+mostly black reads as the lights going out however good the transition is, and
+the director cannot see what an effect looks like unless the effect says. Get it
+roughly right and the edit around your effect gets longer, softer and more
+likely to layer rather than wipe.
 
 Parameters are **expressions over the music**, so an effect becomes beat-reactive
 without containing any sync code:
@@ -223,13 +232,26 @@ without containing any sync code:
 | source | meaning |
 |---|---|
 | `beat` `bar` `phrase` | 0..1 sawtooth per beat / bar / 4-bar phrase |
-| `beatPulse` `barPulse` | exponential decay, 1.0 on the hit |
+| `beatPulse` `barPulse` | exponential decay from the hit, **scaled by how hard it landed** |
+| `beatStrength` | 0..1, that scaling on its own |
 | `onset` | transient strength |
 | `rms` `energy` | level now / section energy |
 | `sub bass lowMid mid high air` | the six band followers |
+| `rmsPeak` `subPeak` … `airPeak` | the same, held at their recent maximum then falling — a meter's peak indicator |
 | `t` `sceneT` `sectionT` | seconds, progress through scene/section |
 
 Functions: `sin cos abs min max clamp mix smoothstep step pow sqrt floor fract mod noise`.
+
+**The beat grid is a metronome; `beatPulse` is not.** The grid ticks through a
+breakdown at the rate it ticks through a chorus, so an effect bound to a bare
+decay bumps whether or not anything hit — the visuals dancing while the music
+isn't. `beatPulse` is therefore scaled by `beatStrength`: the onset envelope at
+that beat (something *started*) times the RMS follower (it was *loud*). Neither
+works alone — the onset envelope has the loudness trend deliberately removed so
+the beat tracker can work through a quiet intro, and RMS can't tell struck from
+sustained. Sections in this repo sit at RMS 0.48 with an onset score of 0.01:
+full level, nothing hitting. A half-time passage needs no special case — its
+off-beats carry no transient, so the picture pulses at the rate the music does.
 
 The shader gets `uResolution uAspect uTime uBeatPulse uBass …`, the run's five
 palette stops as `uPal0..4`, and one `p_<name>` uniform per declared parameter.
@@ -241,6 +263,7 @@ Shared GLSL is available via `#include`:
 #include "palette.glsl"  // pal(), palClamp(), palSteps()
 #include "blend.glsl"    // blendMode() incl. multiply, screen, difference, XOR
 #include "sdf.glsl"      // primitives, raymarch(), softShadow(), AO
+#include "panel.glsl"    // 2D shapes, pixel-unit fill()/stroke(), spectrumNow()
 ```
 
 `kind` is one of `scene2d`, `raymarch`, `scene3d`, `post`, `transition`.

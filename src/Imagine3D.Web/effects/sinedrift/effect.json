@@ -4,6 +4,7 @@
   "kind": "scene2d",
   "tags": ["fluid", "organic", "psychedelic", "abstract", "dream", "cold", "calm"],
   "energyRange": [0.0, 0.55],
+  "coverage": 0.79,
   "cost": "low",
   "description": "Stacked sine warps fold a flat gradient into thick liquid-chrome contour bands. Slow-moving rather than quiet - the motion is calm but the image is not sparse.",
   "shader": "shader.frag",

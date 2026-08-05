@@ -4,6 +4,7 @@
   "kind": "scene2d",
   "tags": ["fire", "warm", "organic", "retro", "amiga", "aggressive"],
   "energyRange": [0.35, 1.0],
+  "coverage": 0.21,
   "aspects": ["16:9", "9:16"],
   "cost": "low",
   "description": "Doom-style rising fire built from advected fBm. Flares up on the kick.",

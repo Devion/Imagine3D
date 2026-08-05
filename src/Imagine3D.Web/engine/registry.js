@@ -66,6 +66,7 @@ export class FragmentEffect {
     set('uSectionT', m.sectionT);
     set('uBeat', m.beat);
     set('uBeatPulse', m.beatPulse);
+    set('uBeatStrength', m.beatStrength);
     set('uBar', m.bar);
     set('uBarPulse', m.barPulse);
     set('uPhrase', m.phrase);
@@ -78,6 +79,13 @@ export class FragmentEffect {
     set('uMid', m.mid);
     set('uHigh', m.high);
     set('uAir', m.air);
+    set('uRmsPeak', m.rmsPeak);
+    set('uSubPeak', m.subPeak);
+    set('uBassPeak', m.bassPeak);
+    set('uLowMidPeak', m.lowMidPeak);
+    set('uMidPeak', m.midPeak);
+    set('uHighPeak', m.highPeak);
+    set('uAirPeak', m.airPeak);
 
     const pal = state.palette;
     for (let i = 0; i < 5; i++) {

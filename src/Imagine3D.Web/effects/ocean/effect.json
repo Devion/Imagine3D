@@ -4,6 +4,7 @@
   "kind": "raymarch",
   "tags": ["water", "fluid", "organic", "vast", "cinematic", "calm", "cold", "dream"],
   "energyRange": [0.0, 0.75],
+  "coverage": 0.72,
   "aspects": ["16:9", "9:16"],
   "cost": "high",
   "description": "Raymarched open sea: octave-summed directional waves, Fresnel sky reflection and subsurface scatter in the wave crests. Swell height follows the bass.",

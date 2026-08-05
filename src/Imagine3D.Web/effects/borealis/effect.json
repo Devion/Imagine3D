@@ -4,6 +4,7 @@
   "kind": "raymarch",
   "tags": ["cold", "vast", "cosmic", "dream", "calm", "organic", "cinematic"],
   "energyRange": [0.0, 0.55],
+  "coverage": 0.41,
   "cost": "high",
   "description": "Aurora curtains built from stacked warped sheets with vertical striations flowing through them, over a star field. Slower and more figurative than the existing aurora - this one has a horizon and a sky.",
   "shader": "shader.frag",

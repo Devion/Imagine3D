@@ -4,6 +4,7 @@
   "kind": "raymarch",
   "tags": ["vast", "cinematic", "warm", "organic", "calm", "sparse", "structure", "dream"],
   "energyRange": [0.0, 0.7],
+  "coverage": 0.73,
   "aspects": ["16:9", "9:16"],
   "cost": "high",
   "rarity": 0.8,

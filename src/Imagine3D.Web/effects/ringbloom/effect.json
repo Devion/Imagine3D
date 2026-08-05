@@ -4,6 +4,7 @@
   "kind": "scene2d",
   "tags": ["psychedelic", "abstract", "glow", "fractal", "geometric", "dream", "cosmic"],
   "energyRange": [0.15, 0.9],
+  "coverage": 0.56,
   "aspects": ["16:9", "9:16"],
   "cost": "low",
   "description": "Space folded into itself repeatedly, each layer drawing a thin glowing ring — endless nested neon rings that breathe with the track. Very cheap for how it looks.",

@@ -4,6 +4,7 @@
   "kind": "scene2d",
   "tags": ["space", "cosmic", "retro", "amiga", "vast", "calm", "sparse"],
   "energyRange": [0.0, 0.8],
+  "coverage": 0.07,
   "aspects": ["16:9", "9:16"],
   "cost": "low",
   "description": "Stars streaming continuously outward from the centre. Flow is one-directional and only occasionally eases backwards; brightness is deliberately steady rather than flashing on the beat.",

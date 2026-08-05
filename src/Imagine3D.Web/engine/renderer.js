@@ -1,7 +1,11 @@
 // The compositor. Given a time t it produces one finished frame:
 //
-//   scene  ->  [transition with the outgoing scene]  ->  post stack
-//          ->  LTX blend  ->  text  ->  output
+//   scene -> its own post stack  ->  [transition with the outgoing scene,
+//                                     graded the same way]
+//         ->  LTX blend  ->  text  ->  output
+//
+// Each scene is graded before the two are mixed, not after. See
+// renderSceneWithPost() for why that order is the one that matters.
 //
 // Preview and final render call exactly the same renderAt(), so what you scrub is
 // what gets encoded.
@@ -234,16 +238,58 @@ export class Renderer {
     };
   }
 
+  /**
+   * Draw a scene into `target` and run *its own* post stack over it, leaving the
+   * finished shot in `target`.
+   *
+   * A scene's post stack belongs to that scene, not to the moment. This used to
+   * run once, after the transition, over whatever mix of the two scenes was on
+   * screen - so at the instant a transition began, the outgoing scene was handed
+   * the incoming scene's grade. Across the plans in this repo 95% of boundaries
+   * have a different stack on each side, which meant almost every cut opened
+   * with the old scene's pixelation, bloom or CRT snapping off in one frame,
+   * before the transition had moved at all. A two-second dissolve cannot hide
+   * that, because it happens before the dissolve starts.
+   *
+   * Grading each shot and then dissolving between the graded shots is both the
+   * correct order and the cheaper mistake to make: it costs one extra post chain
+   * while a transition is running, and nothing the rest of the time.
+   */
+  renderSceneWithPost(scene, t, target) {
+    const state = this.baseState(t, scene);
+    const params = evalParams(this.compiled.get(`s${scene.index}`) ?? {}, state.mod);
+    this.drawEffect(scene.effectId, target, state, params, this.textures());
+
+    let current = target;
+    for (let i = 0; i < (scene.post ?? []).length; i++) {
+      const p = scene.post[i];
+      if (!this.registry.instances.get(p.effectId)) continue;
+
+      const amountFn = this.compiled.get(`s${scene.index}a${i}`)?.__amount;
+      const pState = { ...state, amount: amountFn ? amountFn(state.mod) : 1 };
+      const pParams = evalParams(this.compiled.get(`s${scene.index}p${i}`) ?? {}, state.mod);
+
+      this.drawEffect(p.effectId, this.post.write, pState, pParams,
+        this.textures({ prev: current.texture }));
+      this.post.swap();
+      current = this.post.read;
+    }
+
+    // Park the result back in the scene's own target, so the ping-pong is free
+    // for the other scene's stack.
+    if (current !== target) this.blit(current, target);
+    return state;
+  }
+
   /** Render one finished frame for time t into this.output. */
   renderAt(t) {
     const gl = this.gl;
     const scene = this.sceneAt(t);
     if (!scene) { this.output.bind(); this.output.clear(); return; }
 
-    // --- 1. current scene ---------------------------------------------------
-    const state = this.baseState(t, scene);
-    const params = evalParams(this.compiled.get(`s${scene.index}`) ?? {}, state.mod);
-    this.drawEffect(scene.effectId, this.sceneA, state, params, this.textures());
+    // --- 1. current scene, graded -------------------------------------------
+    const state = this.renderSceneWithPost(scene, t, this.sceneA);
+    let current = this.sceneA;
 
     const intoScene = t - scene.start;
     const prevScene = scene.index > 0 ? this.storyboard.scenes[scene.index - 1] : null;
@@ -264,9 +310,7 @@ export class Renderer {
           Math.min(intoScene / fade, (span - intoScene) / fade));
 
         if (envelope > 0.002) {
-          const pState = this.baseState(t, prevScene);
-          const pParams = evalParams(this.compiled.get(`s${prevScene.index}`) ?? {}, pState.mod);
-          this.drawEffect(prevScene.effectId, this.sceneB, pState, pParams, this.textures());
+          this.renderSceneWithPost(prevScene, t, this.sceneB);
 
           const amountFn = this.compiled.get(`b${scene.index}`)?.__amount;
           const raw = amountFn ? amountFn(state.mod) : 0.6;
@@ -278,7 +322,7 @@ export class Renderer {
           this.drawEffect('sceneblend', this.post.write, bState, {},
             this.textures({ prev: this.sceneB.texture, next: this.sceneA.texture }));
           this.post.swap();
-          this.blit(this.post.read, this.sceneA);
+          current = this.post.read;
           blended = true;
         }
       }
@@ -288,35 +332,17 @@ export class Renderer {
     // Skipped while a blend is doing the work, or the two would fight.
     if (!blended && prevScene && scene.transitionIn && scene.transitionDuration > 0 &&
         intoScene < scene.transitionDuration) {
-      const pState = this.baseState(t, prevScene);
-      const pParams = evalParams(this.compiled.get(`s${prevScene.index}`) ?? {}, pState.mod);
-      this.drawEffect(prevScene.effectId, this.sceneB, pState, pParams, this.textures());
+      this.renderSceneWithPost(prevScene, t, this.sceneB);
 
       const k = Math.min(1, intoScene / scene.transitionDuration);
       const tState = { ...state, amount: k };
       this.drawEffect(scene.transitionIn, this.post.write, tState, {},
         this.textures({ prev: this.sceneB.texture, next: this.sceneA.texture }));
       this.post.swap();
-      this.blit(this.post.read, this.sceneA);
-    }
-
-    // --- 3. post stack ------------------------------------------------------
-    let current = this.sceneA;
-    for (let i = 0; i < (scene.post ?? []).length; i++) {
-      const p = scene.post[i];
-      if (!this.registry.instances.get(p.effectId)) continue;
-
-      const amountFn = this.compiled.get(`s${scene.index}a${i}`)?.__amount;
-      const pState = { ...state, amount: amountFn ? amountFn(state.mod) : 1 };
-      const pParams = evalParams(this.compiled.get(`s${scene.index}p${i}`) ?? {}, state.mod);
-
-      this.drawEffect(p.effectId, this.post.write, pState, pParams,
-        this.textures({ prev: current.texture }));
-      this.post.swap();
       current = this.post.read;
     }
 
-    // --- 4. LTX blend -------------------------------------------------------
+    // --- 3. LTX blend -------------------------------------------------------
     const insert = this.activeInsert(t);
     if (insert) {
       const v = this.videos.get(insert.index);
@@ -336,7 +362,7 @@ export class Renderer {
       }
     }
 
-    // --- 5. text ------------------------------------------------------------
+    // --- 4. text ------------------------------------------------------------
     const cue = this.text.update(this.storyboard.texts ?? [], t);
     if (cue) {
       const cueT = (t - cue.start) / Math.max(1e-6, cue.end - cue.start);
@@ -349,7 +375,7 @@ export class Renderer {
       current = this.post.read;
     }
 
-    // --- 6. output + feedback ----------------------------------------------
+    // --- 5. output + feedback ----------------------------------------------
     this.blit(current, this.output);
     // Feedback must be the finished frame, so trails include post and text.
     this.blit(current, this.feedback);

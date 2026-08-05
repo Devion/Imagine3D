@@ -18,9 +18,13 @@ const CELL_W = 320, CELL_H = 180, COLS = 5, LABEL = 26;
 function fakeMod(t) {
   return {
     t, sceneT: 0.4, sectionT: 0.4, cueT: 0.5, clipT: 0.5,
-    beat: 0.15, beatPulse: 0.8, bar: 0.3, barPulse: 0.6, phrase: 0.25,
-    onset: 0.5, rms: 0.6, energy: 0.6, index: 4,
+    beat: 0.15, beatPulse: 0.8, bar: 0.3, barPulse: 0.6, phrase: 0.25, beatStrength: 0.85,
+    onset: 0.5, rms: 0.6, energy: 0.6, index: 4, rmsPeak: 0.78,
     sub: 0.6, bass: 0.7, lowMid: 0.5, mid: 0.55, high: 0.45, air: 0.4,
+    // Peaks sit above their band, as they do a moment after a hit - otherwise a
+    // meter's cap would render sitting exactly on top of its bar.
+    subPeak: 0.75, bassPeak: 0.88, lowMidPeak: 0.68, midPeak: 0.72,
+    highPeak: 0.6, airPeak: 0.52,
     bands: {},
   };
 }

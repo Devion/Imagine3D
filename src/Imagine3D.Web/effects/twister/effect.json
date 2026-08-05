@@ -4,6 +4,7 @@
   "kind": "scene2d",
   "tags": ["amiga", "retro", "geometric", "mechanical", "showcase"],
   "energyRange": [0.2, 0.8],
+  "coverage": 0.15,
   "aspects": ["16:9", "9:16"],
   "cost": "low",
   "description": "The rotating twisted column — four shaded faces whose vertical twist rate rides the music.",

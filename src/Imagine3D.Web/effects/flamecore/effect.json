@@ -4,6 +4,7 @@
   "kind": "raymarch",
   "tags": ["fire", "warm", "organic", "aggressive", "dream", "cinematic"],
   "energyRange": [0.3, 0.95],
+  "coverage": 0.07,
   "cost": "medium",
   "description": "A single volumetric flame raymarched through a noise-eroded sphere, glowing from the inside out. Where the 2D fire effect gives a wall of flame, this gives one body of it with depth.",
   "shader": "shader.frag",

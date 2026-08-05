@@ -4,6 +4,7 @@
   "kind": "scene2d",
   "tags": ["retro", "geometric", "mechanical", "structure", "showcase", "minimal"],
   "energyRange": [0.15, 0.85],
+  "coverage": 0.08,
   "aspects": ["16:9", "9:16"],
   "cost": "medium",
   "description": "Beveled 3D-looking tetromino blocks tumbling down a well and stacking. Pieces spawn and rotate on the beat, and completed rows flash out.",

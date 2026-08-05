@@ -4,6 +4,7 @@
   "kind": "scene2d",
   "tags": ["water", "fluid", "organic", "vast", "cinematic", "calm", "dream"],
   "energyRange": [0.0, 0.7],
+  "coverage": 0.52,
   "aspects": ["16:9", "9:16"],
   "cost": "medium",
   "description": "Sheets of falling water with foam streaks, rising mist and a churning splash pool. Flow rate and spray follow the track.",

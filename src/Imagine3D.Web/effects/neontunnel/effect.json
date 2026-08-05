@@ -4,6 +4,7 @@
   "kind": "raymarch",
   "tags": ["scifi", "space", "mechanical", "structure", "glow", "cinematic", "build", "high-energy"],
   "energyRange": [0.35, 1.0],
+  "coverage": 0.10,
   "aspects": ["16:9", "9:16"],
   "cost": "high",
   "description": "Flight along a curving corridor with two coloured light strands weaving through it, lit entirely by glow accumulation. The camera follows the same spline the tunnel does, so it banks through the turns.",

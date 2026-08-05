@@ -1,0 +1,24 @@
+{
+  "id": "resonator",
+  "name": "Resonator",
+  "kind": "scene2d",
+  "tags": ["minimal", "glow", "organic", "sparse", "abstract"],
+  "energyRange": [0.05, 0.7],
+  "coverage": 0.18,
+  "aspects": ["16:9", "9:16"],
+  "cost": "low",
+  "description": "Strings stretched between a nut and a bridge, each standing in its own mode — one half-wave for the fundamental, more for every partial above it — with the nodes marked on the board where the string never moves. Tuned across the spectrum and driven by the band followers, whose fast attack and slow release already are a pluck.",
+  "shader": "shader.frag",
+  "params": {
+    "strings": { "type": "float", "default": "6.0", "min": 2, "max": 12 },
+    "modes": { "type": "float", "default": "1.0", "min": 0, "max": 4,
+               "description": "How fast the partial number climbs from string to string. 1 gives modes 1,2,3,4…; 2 gives the odd partials 1,3,5,7…; 0 puts every string on the fundamental, which reads as a rope bridge rather than an instrument." },
+    "ring": { "type": "float", "default": "2.4 + 1.6*energy", "min": 0, "max": 12,
+              "description": "Vibration rate. Higher modes ring faster than lower ones whatever this is set to, which is the part that matters." },
+    "swing": { "type": "float", "default": "1.0 + 0.4*rms", "min": 0, "max": 2,
+               "description": "Amplitude, as a fraction of the gap to the next string — so a loud band can never swing one string through its neighbour." },
+    "gauge": { "type": "float", "default": "1.0", "min": 0.3, "max": 4,
+               "description": "String thickness. Bass strings are drawn heavier than treble ones at any setting." },
+    "glow": { "type": "float", "default": "1.0 + 0.4*beatPulse", "min": 0, "max": 3 }
+  }
+}

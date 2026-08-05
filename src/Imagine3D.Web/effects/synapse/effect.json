@@ -4,6 +4,7 @@
   "kind": "scene2d",
   "tags": ["abstract", "structure", "geometric", "cosmic", "dream", "glow", "psychedelic"],
   "energyRange": [0.15, 0.85],
+  "coverage": 0.15,
   "cost": "medium",
   "description": "Drifting nodes wired to their neighbours, in four layers flying toward the camera. The node sparkle rides the low end, so the network fires on the beat rather than on a timer.",
   "shader": "shader.frag",

@@ -4,6 +4,7 @@
   "kind": "scene2d",
   "tags": ["amiga", "retro", "psychedelic", "geometric", "space", "build", "tension"],
   "energyRange": [0.25, 0.95],
+  "coverage": 0.60,
   "aspects": ["16:9", "9:16"],
   "cost": "low",
   "description": "The classic polar-mapped tunnel. Flight speed and twist track the music; the checker pattern flips on the bar.",

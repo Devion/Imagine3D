@@ -4,6 +4,7 @@
   "kind": "scene2d",
   "tags": ["city", "urban", "cinematic", "structure", "scifi", "dream", "calm", "vast"],
   "energyRange": [0.05, 0.7],
+  "coverage": 0.43,
   "cost": "medium",
   "description": "Night motorway seen through a rain-covered windscreen - headlights, tail lights and sodium street lamps as bokeh, with drops sliding down the glass and dragging the whole image with them. The only effect here with a place in it.",
   "shader": "shader.frag",

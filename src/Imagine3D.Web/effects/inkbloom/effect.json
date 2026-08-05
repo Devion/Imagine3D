@@ -4,6 +4,7 @@
   "kind": "scene2d",
   "tags": ["organic", "fluid", "dream", "calm", "abstract", "water", "intimate", "psychedelic"],
   "energyRange": [0.0, 0.65],
+  "coverage": 0.37,
   "aspects": ["16:9", "9:16"],
   "cost": "medium",
   "description": "Drops of ink released into still water: each bloom spreads on a diffusion curve, its boundary growing tendrils as it goes, and stacks with the others as pigment rather than paint. Slow and quiet — for intros, verses and comedowns.",

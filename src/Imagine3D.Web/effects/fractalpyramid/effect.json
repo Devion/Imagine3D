@@ -4,6 +4,7 @@
   "kind": "raymarch",
   "tags": ["fractal", "geometric", "psychedelic", "abstract", "cosmic", "showcase"],
   "energyRange": [0.25, 1.0],
+  "coverage": 0.46,
   "aspects": ["16:9", "9:16"],
   "cost": "medium",
   "description": "Folded-space pyramid fractal rendered as accumulated glow rather than a solid surface, so the structure shows through itself. Technique after the 'fractal pyramid' Shadertoy.",

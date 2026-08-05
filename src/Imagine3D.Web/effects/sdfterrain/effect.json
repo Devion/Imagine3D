@@ -4,6 +4,7 @@
   "kind": "raymarch",
   "tags": ["vast", "cinematic", "organic", "structure", "calm", "dream"],
   "energyRange": [0.1, 0.75],
+  "coverage": 0.60,
   "aspects": ["16:9", "9:16"],
   "cost": "high",
   "description": "Low-flying pass over ridged fractal mountains with height-banded colour and horizon haze.",

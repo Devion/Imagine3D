@@ -4,6 +4,7 @@
   "kind": "scene2d",
   "tags": ["geometric", "minimal", "abstract", "psychedelic", "mechanical", "sparse", "cold"],
   "energyRange": [0.05, 0.65],
+  "coverage": 0.58,
   "aspects": ["16:9", "9:16"],
   "cost": "low",
   "description": "Two drifting concentric ring patterns beating against each other. Almost free, and hypnotic on quiet passages.",

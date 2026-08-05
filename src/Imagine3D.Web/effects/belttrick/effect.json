@@ -4,6 +4,7 @@
   "kind": "raymarch",
   "tags": ["geometric", "structure", "mechanical", "showcase", "scifi", "abstract", "space"],
   "energyRange": [0.25, 0.9],
+  "coverage": 0.63,
   "cost": "high",
   "description": "An infinite lattice of cubes joined by six ribbons, spinning through 720 degrees and untangling itself - the Dirac belt trick. The ribbons never break because the rotation is applied as a spinor, so a full double turn returns to the identity.",
   "shader": "shader.frag",

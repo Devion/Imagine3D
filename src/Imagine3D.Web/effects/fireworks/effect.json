@@ -4,6 +4,7 @@
   "kind": "scene2d",
   "tags": ["bright", "glow", "warm", "high-energy", "showcase", "cinematic", "space", "cosmic"],
   "energyRange": [0.3, 1.0],
+  "coverage": 0.53,
   "aspects": ["16:9", "9:16"],
   "cost": "high",
   "rarity": 0.7,

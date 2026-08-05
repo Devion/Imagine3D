@@ -4,6 +4,7 @@
   "kind": "raymarch",
   "tags": ["organic", "dream", "psychedelic", "vast", "cinematic", "calm", "fluid"],
   "energyRange": [0.0, 0.7],
+  "coverage": 0.80,
   "aspects": ["16:9", "9:16"],
   "cost": "high",
   "description": "Colourful raymarched fBm cloudscape lit from within. Slow, wide and expensive — for intros, breakdowns and outros.",

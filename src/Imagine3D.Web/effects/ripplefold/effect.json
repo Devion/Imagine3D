@@ -4,6 +4,7 @@
   "kind": "scene2d",
   "tags": ["abstract", "psychedelic", "organic", "fluid", "minimal", "cold", "water"],
   "energyRange": [0.1, 0.7],
+  "coverage": 0.54,
   "cost": "medium",
   "description": "Raindrop rings displace a folded fractal field. The source synthesised its own heartbeat to pulse the zoom; here the beat does it, so the rings land with the track.",
   "shader": "shader.frag",

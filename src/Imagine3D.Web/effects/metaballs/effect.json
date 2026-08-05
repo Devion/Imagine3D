@@ -4,6 +4,7 @@
   "kind": "scene2d",
   "tags": ["amiga", "retro", "organic", "psychedelic", "abstract", "fluid"],
   "energyRange": [0.15, 0.75],
+  "coverage": 0.20,
   "aspects": ["16:9", "9:16"],
   "cost": "low",
   "description": "Blobs on lissajous paths merging by summed inverse-square fields, contoured into hard palette bands.",

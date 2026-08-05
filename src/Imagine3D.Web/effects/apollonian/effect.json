@@ -4,6 +4,7 @@
   "kind": "raymarch",
   "tags": ["fractal", "psychedelic", "abstract", "structure", "cosmic", "showcase", "geometric"],
   "energyRange": [0.35, 1.0],
+  "coverage": 0.30,
   "cost": "high",
   "description": "Two fractal distance fields - a sine-folded lattice and an Apollonian sphere packing - lit from inside by a moving point light, with a reflection pass. The most expensive effect in the library; it earns a showcase section, not a whole video.",
   "shader": "shader.frag",
@@ -13,7 +14,14 @@
       "default": "1.0 + 0.5*rms",
       "min": 0.0,
       "max": 3.0,
-      "description": "Master rate. Drives the camera orbit directly, and the fold below through it."
+      "description": "Master rate. Both the orbit and the fold below are fractions of it, so this is the one knob that changes how busy the whole thing is."
+    },
+    "orbit": {
+      "type": "float",
+      "default": "0.11",
+      "min": 0.0,
+      "max": 0.6,
+      "description": "Camera orbit, in radians per second at speed 1. The packing is dense enough that a tenth of a radian sweeps a whole generation of spheres past the frame, so this wants to stay low - 0.11 takes about a minute to come round, which is a slow drift over a scene rather than a ride. Above ~0.3 it reads as flying through the fractal at speed."
     },
     "churn": {
       "type": "float",

@@ -4,6 +4,7 @@
   "kind": "raymarch",
   "tags": ["retro", "vast", "cinematic", "geometric", "structure", "dream", "glow", "space"],
   "energyRange": [0.15, 0.85],
+  "coverage": 0.72,
   "aspects": ["16:9", "9:16"],
   "cost": "high",
   "rarity": 0.9,

@@ -121,13 +121,18 @@ public sealed class Director(EffectRegistry registry)
             double prevEnergy = i > 0 ? sections[i - 1].Energy : 0;
             double delta = intensity - prevEnergy;
 
+            // What the scene before this one looked like. The edit is a question
+            // about two pictures, and until this was passed down the director was
+            // only ever told about one of them.
+            var outgoing = i > 0 ? registry.Get(scenes[i - 1].EffectId) : null;
+
             // A scene either blends with the one before it or cuts to it. Blending
             // is the more interesting edit when nothing in the music demands a
             // hard break, so it is offered first.
-            var blend = PickBlend(i, sec, pick, candidates, delta, intensity, rng);
+            var blend = PickBlend(i, sec, pick, outgoing, delta, intensity, rng);
             var (transition, transitionDur) = blend is not null
                 ? ("fade", 0.0)   // the blend's own ramp is the transition
-                : PickTransition(i, sec, delta, recentTransitions, cast, rng);
+                : PickTransition(i, sec, delta, recentTransitions, cast, rng, outgoing, pick);
             if (blend is null) recentTransitions.Add(transition);
 
             scenes.Add(new StoryScene(
@@ -222,11 +227,13 @@ public sealed class Director(EffectRegistry registry)
         // already scored on its own and scored heavily.
         //
         // At full weight these four words were the whole reason two effects appeared
-        // in every video in this repo. `lightning` is the only scene effect naming
+        // in every video in this repo. `lightning` was the only scene effect naming
         // both "high-energy" and "aggressive", and `copperbars` one of very few naming
-        // both "calm" and "sparse", so each collected a free two-tag match on every
-        // loud (respectively quiet) section of every song - roughly a point of
-        // advantage, compounded by a sampler that is exponential in score. The music
+        // both "calm" and "sparse" - both have since been removed for other reasons,
+        // but the shape of the problem is not about them - so each collected a free
+        // two-tag match on every loud (respectively quiet) section of every song:
+        // roughly a point of advantage, compounded by a sampler that is
+        // exponential in score. The music
         // never asked for them; the director inferred them from the same number it was
         // about to score again.
         if (sec.Energy > 0.72) Add(["high-energy", "aggressive"], DerivedTagWeight);
@@ -240,10 +247,10 @@ public sealed class Director(EffectRegistry registry)
     /// Every other term is a property of the effect and the section and nothing else,
     /// so the same effect won the same kind of section in every song: measured over
     /// the 17 projects in this repo, `lightning` appeared in 17 of 17 and `copperbars`
-    /// opened 7 of them, while five scene effects were never picked at all. The
-    /// weighted sampler cannot fix that on its own - it draws from an identical
-    /// distribution every time, so a candidate half a point ahead is favoured in every
-    /// video rather than in half of them.
+    /// opened 7 of them (both since removed), while five scene effects were never
+    /// picked at all. The weighted sampler cannot fix that on its own - it draws
+    /// from an identical distribution every time, so a candidate half a point ahead
+    /// is favoured in every video rather than in half of them.
     ///
     /// Giving each project a cast drawn from its seed makes that half-point advantage
     /// local: an effect that leads one video sits near the bottom of the next, and
@@ -294,10 +301,10 @@ public sealed class Director(EffectRegistry registry)
         // Energy is a hard gate, not a preference.
         //
         // It used to be one term among several, and a well-tagged effect could
-        // out-argue it: `lightning` (declared [0.5, 1.0]) would win a section at
-        // energy 0.2 on tag overlap alone, which is exactly as wrong as it
-        // sounds. A quiet passage now can only be given something that says it
-        // suits a quiet passage.
+        // out-argue it: the since-removed `lightning` (declared [0.5, 1.0]) would
+        // win a section at energy 0.2 on tag overlap alone, which is exactly as
+        // wrong as it sounds. A quiet passage now can only be given something that
+        // says it suits a quiet passage.
         var eligible = candidates.Where(e => e.FitsEnergy(energy)).ToList();
 
         // Widen only if nothing at all is declared for this energy, so a library
@@ -473,13 +480,28 @@ public sealed class Director(EffectRegistry registry)
     static readonly string[] HotBlends = ["screen", "add", "difference", "lighten"];
     static readonly string[] CoolBlends = ["multiply", "overlay", "softlight", "screen"];
 
+    /// How much emptier the frame has to get before the boundary counts as one
+    /// the picture cannot absorb on its own. See Emptying.
+    const double EmptyingGap = 0.22;
+
+    /// How much of the frame the outgoing scene fills and the incoming one does
+    /// not. Positive only: arriving at a fuller frame is never the problem.
+    ///
+    /// This is the edit the complaint is about. A busy full-frame shader cut to
+    /// something sparse - orbs floating in a void - falls off a cliff no matter
+    /// which transition is running, because a wipe or a dissolve can only trade
+    /// one picture for another and there is no second picture over most of the
+    /// frame. Arriving somewhere fuller reads fine: things turn up.
+    static double Emptying(EffectManifest? from, EffectManifest to) =>
+        from is null ? 0 : Math.Max(0, from.Coverage - to.Coverage);
+
     /// Decide whether this scene layers over the previous one instead of cutting.
     ///
     /// Cutting every time makes a long video feel like a slideshow. Blending is
     /// held back where the music genuinely breaks - a big energy jump or a strong
     /// section boundary earns a cut - and used elsewhere.
     SceneBlend? PickBlend(
-        int index, Section sec, EffectManifest scene, List<EffectManifest> candidates,
+        int index, Section sec, EffectManifest scene, EffectManifest? outgoing,
         double energyDelta, double energy, Random rng)
     {
         if (index == 0) return null;
@@ -493,16 +515,26 @@ public sealed class Director(EffectRegistry registry)
         // Too short to establish a layered look.
         if (sec.Duration < MinSceneSeconds * 1.5) return null;
 
-        if (rng.NextDouble() > 0.45) return null;
+        // Emptying out is the one case where layering is clearly the right answer
+        // rather than merely a nicer one: the outgoing scene stays underneath and
+        // thins away, so the frame is never asked to be full and empty in the same
+        // instant. At a full drop this takes the odds from 45% to near certain.
+        double emptying = Emptying(outgoing, scene);
+        if (rng.NextDouble() > 0.45 + emptying * 0.85) return null;
 
         var pool = energy > 0.55 ? HotBlends : CoolBlends;
         var mode = pool[rng.Next(pool.Length)];
 
         // Either layer for the whole scene, or bleed through for a few seconds
-        // and resolve to the new scene alone.
-        bool wholeScene = rng.NextDouble() < 0.35;
+        // and resolve to the new scene alone. A big drop wants the sustained
+        // version - a short bleed-through leaves the same cliff a few seconds
+        // later, just with a longer run-up.
+        bool wholeScene = rng.NextDouble() < 0.35 + emptying * 0.6;
         double duration = wholeScene ? 0 : Math.Min(sec.Duration * 0.7, 3.0 + rng.NextDouble() * 5.0);
-        double fade = Math.Min(1.6, Math.Max(0.6, sec.Duration * 0.12));
+
+        // The ramp has to be long enough to cover the drop it is hiding.
+        double fade = Math.Min(2.6, Math.Max(0.6, sec.Duration * 0.12) + emptying * 2.0);
+        fade = Math.Min(fade, sec.Duration * 0.35);
 
         // Sustained layering sits back so the new scene still reads; a short
         // bleed-through can afford to be strong.
@@ -537,20 +569,30 @@ public sealed class Director(EffectRegistry registry)
 
     (string Id, double Duration) PickTransition(
         int index, Section sec, double energyDelta, List<string> recent,
-        IReadOnlyDictionary<string, double> cast, Random rng)
+        IReadOnlyDictionary<string, double> cast, Random rng,
+        EffectManifest? outgoing, EffectManifest incoming)
     {
         if (index == 0) return ("fadethrough", 1.4);
 
         var pool = registry.OfKind("transition").ToList();
         if (pool.Count == 0) return ("cut", 0);
 
+        double emptying = Emptying(outgoing, incoming);
+        bool cliff = emptying > EmptyingGap;
+
         // A hard boundary into a louder section wants a cut; a gentle one into a
         // quieter section wants a dissolve. This is the single most audible way the
         // edit either matches the music or fights it.
-        bool hard = energyDelta > 0.15 || sec.BoundaryStrength > 0.72;
+        //
+        // Except over a cliff. A hard cut is a statement that the two shots belong
+        // next to each other, and when one of them cannot fill the frame the other
+        // just left, it is not a statement, it is a hole - so the music no longer
+        // gets to ask for one.
+        bool hard = !cliff && (energyDelta > 0.15 || sec.BoundaryStrength > 0.72);
         bool soft = energyDelta < -0.1;
 
         var wanted = hard ? new[] { "hard", "impact", "glitch" }
+                   : cliff ? ["soft", "dissolve", "cinematic"]
                    : soft ? ["soft", "dissolve", "fluid", "cinematic"]
                    : ["wipe", "geometric", "mechanical", "retro"];
 
@@ -562,7 +604,15 @@ public sealed class Director(EffectRegistry registry)
                              // half the edits and the video reads as repetitive.
                              + RepetitionPenalty(e.Id, recent)
                              + e.RarityBias(Temperature)
-                             + cast.GetValueOrDefault(e.Id)))
+                             + cast.GetValueOrDefault(e.Id)
+                             // Over a cliff, the transition that never puts both
+                             // scenes on screen at once is the honest one: it fades
+                             // the full frame out and the sparse one in, so nothing
+                             // ever has to sit next to a hole. Wipes are the worst
+                             // answer here for the same reason - they hold the two
+                             // side by side and show you the difference.
+                             + (cliff && e.Id == "fadethrough" ? 2.6 : 0.0)
+                             + (cliff && e.Tags.Contains("wipe") ? -2.2 : 0.0)))
             .ToList();
 
         var pick = SampleByScore(scored, rng, Temperature);
@@ -572,6 +622,11 @@ public sealed class Director(EffectRegistry registry)
         double dur = hard ? 0.12 + rng.NextDouble() * 0.25
                    : soft ? 1.2 + rng.NextDouble() * 1.6
                    : 0.5 + rng.NextDouble() * 1.0;
+
+        // However the music reads, the picture needs time in proportion to how far
+        // it has to travel. A 0.5s wipe between two comparable frames is brisk;
+        // the same 0.5s off a full frame onto a near-empty one is a light switch.
+        dur = Math.Max(dur, emptying * 2.6);
 
         // A fade-through has to cover three phases, so give it room.
         if (pick.Id == "fadethrough") dur = Math.Max(dur, 1.1);

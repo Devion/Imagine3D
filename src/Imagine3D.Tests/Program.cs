@@ -198,8 +198,8 @@ static class Program
     ///
     /// Replans every project that has an analysis on disk, over a spread of seeds,
     /// and reports what got picked. The complaint this answers is not a crash - it is
-    /// "lightning is in every video" - and the only way to see that is in aggregate,
-    /// across projects, which no single render shows.
+    /// "the same effect is in every video" - and the only way to see that is in
+    /// aggregate, across projects, which no single render shows.
     ///   dotnet run --project src/Imagine3D.Tests -- --variety [seeds] [projectsRoot]
     static int VarietyReport(string[] args)
     {
@@ -224,6 +224,8 @@ static class Program
         var openers = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         int totalScenes = 0, videos = 0;
         double distinctShare = 0;
+        var cliffEdits = new EditStats();
+        var levelEdits = new EditStats();
 
         Console.WriteLine($"=== Variety over {seeds} seeds ===");
         Console.WriteLine($"library : {library.Count} scene effects, {registry.All.Count} total");
@@ -256,6 +258,33 @@ static class Program
                 foreach (var id in ids.Distinct(StringComparer.OrdinalIgnoreCase)) Bump(sceneVideos, id);
                 foreach (var scene in sb.Scenes)
                     foreach (var p in scene.Post) Bump(postUses, p.EffectId);
+
+                // How each boundary was handled, split by whether the frame had to
+                // empty out across it. A cut from something full-frame to something
+                // sparse is the edit that reads as damage however good the
+                // transition is, and this is the only place it is visible: one
+                // render shows you a bad cut, it does not show you that a tenth of
+                // them are bad.
+                for (int b = 1; b < sb.Scenes.Length; b++)
+                {
+                    var from = registry.Get(sb.Scenes[b - 1].EffectId);
+                    var to = registry.Get(sb.Scenes[b].EffectId);
+                    if (from is null || to is null) continue;
+
+                    bool cliff = from.Coverage - to.Coverage > 0.22;
+                    var bucket = cliff ? cliffEdits : levelEdits;
+                    bucket.Count++;
+
+                    if (sb.Scenes[b].Blend is not null) bucket.Blended++;
+                    else
+                    {
+                        double dur = sb.Scenes[b].TransitionDuration;
+                        bucket.Duration += dur;
+                        if (dur < 0.4) bucket.Snapped++;
+                        var t = registry.Get(sb.Scenes[b].TransitionIn);
+                        if (t is not null && t.Tags.Contains("wipe")) bucket.Wiped++;
+                    }
+                }
             }
 
             Console.WriteLine($"  {Path.GetFileName(dir),-26} {perProject.Count / seeds,3} scenes/plan, " +
@@ -284,9 +313,29 @@ static class Program
         foreach (var (id, uses) in postUses.OrderByDescending(kv => kv.Value))
             Console.WriteLine($"  {id,-16} {uses,6} {uses / (double)Math.Max(1, totalPost),7:P1}");
 
+        Console.WriteLine("\n  boundary          count   blended   wiped   under 0.4s   mean cut");
+        Report("emptying out", cliffEdits);
+        Report("level", levelEdits);
+
         return 0;
 
         static void Bump(Dictionary<string, int> d, string k) => d[k] = d.GetValueOrDefault(k) + 1;
+
+        static void Report(string label, EditStats s)
+        {
+            int cuts = s.Count - s.Blended;
+            Console.WriteLine($"  {label,-16} {s.Count,5} {s.Blended / (double)Math.Max(1, s.Count),9:P0} " +
+                              $"{s.Wiped / (double)Math.Max(1, cuts),7:P0} " +
+                              $"{s.Snapped / (double)Math.Max(1, cuts),12:P0} " +
+                              $"{s.Duration / Math.Max(1, cuts),9:F2}s");
+        }
+    }
+
+    /// How one class of scene boundary got edited, across every plan.
+    sealed class EditStats
+    {
+        public int Count, Blended, Wiped, Snapped;
+        public double Duration;
     }
 
     /// Both roots are found the same way the app finds them: walk up for the solution.

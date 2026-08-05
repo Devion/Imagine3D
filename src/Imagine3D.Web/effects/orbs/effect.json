@@ -4,6 +4,7 @@
   "kind": "raymarch",
   "tags": ["space", "cosmic", "geometric", "showcase", "psychedelic", "structure", "build", "tension"],
   "energyRange": [0.2, 1.0],
+  "coverage": 0.27,
   "aspects": ["16:9", "9:16"],
   "cost": "high",
   "description": "A ring of glossy 3D orbs rotating in space that funnels into a wormhole as the scene runs. The `wormhole` parameter morphs between the two, so one scene can start as an orbiting ring and end as a tunnel.",

@@ -5,6 +5,7 @@
   "module": true,
   "tags": ["showcase", "mechanical", "structure", "creature", "vehicle", "scifi", "cinematic"],
   "energyRange": [0.2, 0.85],
+  "coverage": 0.21,
   "aspects": ["16:9", "9:16"],
   "cost": "medium",
   "description": "A model from the asset library rotating on a plinth with rim lighting and a beat-driven pulse. Falls back to procedural geometry if the asset catalogue is empty.",

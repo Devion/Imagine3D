@@ -1,0 +1,25 @@
+{
+  "id": "spectrum",
+  "name": "Spectrum analyser",
+  "kind": "scene2d",
+  "tags": ["mechanical", "geometric", "retro", "structure", "glow"],
+  "energyRange": [0.2, 1.0],
+  "coverage": 0.47,
+  "aspects": ["16:9", "9:16"],
+  "cost": "low",
+  "description": "A hi-fi LED analyser: a ladder of segments per bar running green through amber to red, a cap that holds each bar's peak and then slides down, and the whole thing reflected in the gloss below the baseline. The bars are read off a curve through the six band followers, so the shape across the frame is a real spectrum at the resolution the analysis actually has.",
+  "shader": "shader.frag",
+  "params": {
+    "bars": { "type": "float", "default": "28.0", "min": 4, "max": 64,
+              "description": "Columns across the frame. Past ~40 the segments are narrower than they are tall and it stops reading as a ladder." },
+    "segments": { "type": "float", "default": "20.0", "min": 4, "max": 40,
+                  "description": "LEDs per column." },
+    "detail": { "type": "float", "default": "0.35", "min": 0, "max": 1,
+                "description": "Per-bar deviation from the six-point curve, scaled by that bar's own level and by onset. 0 gives the honest interpolation and looks like a drawn curve; the default gives an analyser. Past ~0.7 neighbouring bars disagree more than the music does." },
+    "tint": { "type": "float", "default": "0.5", "min": 0, "max": 1,
+              "description": "Blends the green/amber/red ladder toward the project palette. 0 is a literal hi-fi meter, 1 is the palette alone and loses the meaning the colours carry." },
+    "glow": { "type": "float", "default": "0.9 + 0.5*beatPulse", "min": 0, "max": 3 },
+    "reflect": { "type": "float", "default": "0.45", "min": 0, "max": 1,
+                 "description": "Strength of the reflection below the baseline." }
+  }
+}

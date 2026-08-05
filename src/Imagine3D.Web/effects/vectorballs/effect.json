@@ -4,6 +4,7 @@
   "kind": "scene2d",
   "tags": ["amiga", "retro", "showcase", "geometric", "mechanical", "structure"],
   "energyRange": [0.25, 0.9],
+  "coverage": 0.08,
   "aspects": ["16:9", "9:16"],
   "cost": "medium",
   "description": "A rotating 3D formation of shaded spheres, depth-sorted and drawn as sprites — the effect every Amiga demo used to prove it could do 3D.",

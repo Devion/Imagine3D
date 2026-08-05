@@ -4,6 +4,7 @@
   "kind": "scene2d",
   "tags": ["amiga", "retro", "psychedelic", "abstract", "organic", "calm"],
   "energyRange": [0.1, 0.7],
+  "coverage": 0.48,
   "aspects": ["16:9", "9:16"],
   "cost": "low",
   "description": "The classic summed-sine plasma with a cycling palette. Scale punches on the beat and the palette drifts with the bass.",

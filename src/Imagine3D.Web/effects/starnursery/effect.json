@@ -4,6 +4,7 @@
   "kind": "scene2d",
   "tags": ["space", "cosmic", "vast", "dream", "psychedelic", "calm", "glow", "abstract"],
   "energyRange": [0.0, 0.75],
+  "coverage": 0.70,
   "aspects": ["16:9", "9:16"],
   "cost": "medium",
   "description": "A nebula built from an inversion fractal sampled as a scalar field: the sum of how sharply the orbit's magnitude changes at each fold, which piles up into filaments and voids. Two layers at different depths drift past each other, with stars behind. The original was written against an FFT texture, so it drives directly off the real spectrum here.",

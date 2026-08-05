@@ -4,6 +4,7 @@
   "kind": "raymarch",
   "tags": ["space", "scifi", "structure", "psychedelic", "geometric", "build", "cosmic"],
   "energyRange": [0.3, 0.95],
+  "coverage": 0.65,
   "cost": "high",
   "description": "Concentric rings of tubes seen through a spherical inversion, so the field turns inside out at the horizon and the same geometry reads convex outside it and concave within.",
   "shader": "shader.frag",

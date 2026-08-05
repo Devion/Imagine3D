@@ -4,6 +4,7 @@
   "kind": "raymarch",
   "tags": ["geometric", "structure", "abstract", "organic", "psychedelic", "showcase"],
   "energyRange": [0.2, 0.85],
+  "coverage": 0.78,
   "cost": "high",
   "description": "Flight through two interlocking gyroid surfaces, lit and reflective. The minimal surface is a lattice and a membrane at the same time, so it reads as architecture that grew rather than was built.",
   "shader": "shader.frag",

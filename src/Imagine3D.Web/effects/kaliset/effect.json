@@ -4,6 +4,7 @@
   "kind": "raymarch",
   "tags": ["fractal", "psychedelic", "abstract", "geometric", "cosmic", "high-energy"],
   "energyRange": [0.4, 1.0],
+  "coverage": 0.35,
   "aspects": ["16:9", "9:16"],
   "cost": "medium",
   "description": "Kali-set folding fractal — infinitely detailed geometric lattice that morphs with the track. Hypnotic and busy; good for peaks.",

@@ -4,6 +4,7 @@
   "kind": "raymarch",
   "tags": ["cold", "vast", "cosmic", "dream", "calm", "sparse", "organic", "cinematic"],
   "energyRange": [0.0, 0.6],
+  "coverage": 0.25,
   "aspects": ["16:9", "9:16"],
   "cost": "high",
   "description": "Northern-lights curtains rippling over a starfield: a volume of thin vertical sheets accumulated front to back, brightening from the base upward.",

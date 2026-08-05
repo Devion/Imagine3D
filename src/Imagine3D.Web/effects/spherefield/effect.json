@@ -4,6 +4,7 @@
   "kind": "raymarch",
   "tags": ["space", "geometric", "showcase", "cosmic", "structure", "cinematic"],
   "energyRange": [0.25, 0.9],
+  "coverage": 0.58,
   "aspects": ["16:9", "9:16"],
   "cost": "high",
   "description": "Infinite lattice of shaded spheres flown through, with soft shadows and AO. The 'proper 3D' scene that raytraced demos showed off.",

@@ -27,7 +27,8 @@ uniform float uAmount;      // wet/dry for post effects
 
 // Music. See engine/modulation.js for how each is derived.
 uniform float uBeat;        // 0..1 sawtooth per beat
-uniform float uBeatPulse;   // 1.0 on the hit, decaying
+uniform float uBeatPulse;   // decaying punch, already scaled by uBeatStrength
+uniform float uBeatStrength;// 0..1: how hard the last beat actually landed
 uniform float uBar;
 uniform float uBarPulse;
 uniform float uPhrase;
@@ -35,6 +36,11 @@ uniform float uOnset;
 uniform float uRms;
 uniform float uEnergy;
 uniform float uSub, uBass, uLowMid, uMid, uHigh, uAir;
+
+// Peak-hold companions: the same value held at its recent maximum and then
+// falling, which is what a meter's peak indicator or an analyser's cap rides on.
+uniform float uRmsPeak;
+uniform float uSubPeak, uBassPeak, uLowMidPeak, uMidPeak, uHighPeak, uAirPeak;
 
 uniform sampler2D uPrev;      // what this pass is drawing on top of
 uniform sampler2D uNext;      // transitions only: the incoming scene

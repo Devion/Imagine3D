@@ -4,6 +4,7 @@
   "kind": "scene2d",
   "tags": ["retro", "amiga", "geometric", "space", "structure", "showcase"],
   "energyRange": [0.15, 0.8],
+  "coverage": 0.48,
   "aspects": ["16:9", "9:16"],
   "cost": "low",
   "description": "Infinite perspective checkerboard under a horizon and starfield — the ray-traced floor every 90s demo opened with.",

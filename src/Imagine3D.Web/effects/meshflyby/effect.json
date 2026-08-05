@@ -5,6 +5,7 @@
   "module": true,
   "tags": ["city", "urban", "structure", "vast", "cinematic", "space", "scifi", "build"],
   "energyRange": [0.25, 0.95],
+  "coverage": 0.65,
   "aspects": ["16:9", "9:16"],
   "cost": "high",
   "description": "Camera flight through a large model from the asset library — cityscapes, stations, terrain. Falls back to a procedural block city if the catalogue is empty.",

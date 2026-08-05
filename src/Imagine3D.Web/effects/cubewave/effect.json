@@ -4,6 +4,7 @@
   "kind": "raymarch",
   "tags": ["geometric", "structure", "mechanical", "retro", "abstract", "showcase", "high-energy", "cosmic"],
   "energyRange": [0.3, 1.0],
+  "coverage": 0.44,
   "aspects": ["16:9", "9:16"],
   "cost": "high",
   "rarity": 0.85,
