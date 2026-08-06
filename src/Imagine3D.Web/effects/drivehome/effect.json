@@ -11,8 +11,10 @@
   "description": "Night motorway seen through a rain-covered windscreen - headlights, tail lights and sodium street lamps as bokeh, with drops sliding down the glass and dragging the whole image with them. The only effect here with a place in it.",
   "shader": "shader.frag",
   "params": {
-    "speed": { "type": "float", "default": "0.03 + 0.02*rms", "min": 0.0, "max": 0.2,
+    "speed": { "type": "float", "default": "0.018 + 0.010*rms", "min": 0.0, "max": 0.2,
               "description": "Road speed. Small numbers: the traffic scrolls slowly even at the top of the range." },
+    "rainRate": { "type": "float", "default": "0.55", "min": 0, "max": 3,
+                  "description": "How fast rain slides down the glass. It is the busiest motion in the frame, so this is the knob that decides whether the shot feels like a drive or a chase." },
     "rain": { "type": "float", "default": "1.0", "min": 0.0, "max": 2.0,
              "description": "Strength of the drop refraction. At 0 the windscreen is dry and the lights go sharp." },
     "shake": { "type": "float", "default": "1.0 + 2.5*bass", "min": 0.0, "max": 6.0,

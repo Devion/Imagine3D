@@ -2,21 +2,62 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Imagine3D — effect contact sheet</title>
+  <title>Imagine3D — effect gallery</title>
   <style>
     body { margin: 0; background: #0b0d12; color: #e6ebf5;
            font: 13px "Segoe UI", system-ui, sans-serif; padding: 16px; }
-    h1 { font-size: 16px; margin: 0 0 12px; }
-    #status { color: #8792a8; margin-bottom: 12px; }
-    #sheet { max-width: 100%; border: 1px solid #262d3d; border-radius: 8px; }
-    .controls { margin-bottom: 12px; display: flex; gap: 8px; align-items: center; }
+    h1 { font-size: 16px; margin: 0 0 4px; }
+    .lead { color: #8792a8; margin: 0 0 12px; max-width: 96ch; }
+    .controls { margin-bottom: 10px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
     button, select { font: inherit; background: #1b2130; color: inherit;
                      border: 1px solid #262d3d; border-radius: 6px; padding: 6px 12px; }
+    button:hover:not(:disabled) { background: #232b3e; }
+    button:disabled { opacity: 0.4; }
+    #status { color: #8792a8; margin: 8px 0 14px; font-variant-numeric: tabular-nums; }
+
+    /* Transport */
+    .transport { display: flex; gap: 10px; align-items: center; flex: 1 1 320px; min-width: 280px; }
+    #scrub { flex: 1; accent-color: #4da3ff; }
+    .clock { font-variant-numeric: tabular-nums; color: #b6c0d4; min-width: 11ch; }
+    .bpm { color: #4da3ff; font-weight: 600; }
+
+    /* Gallery */
+    #gallery { display: grid; gap: 10px;
+               grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+    .card { margin: 0; background: #12151d; border: 1px solid #212838; border-radius: 8px;
+            overflow: hidden; }
+    .card.playing { border-color: #4da3ff; }
+    .card.failed { border-color: #6b2b2b; }
+    .shot-wrap { position: relative; line-height: 0; }
+    .shot { width: 100%; height: auto; display: block; cursor: pointer; background: #000; }
+    .play { position: absolute; left: 8px; bottom: 8px; padding: 4px 10px; line-height: 1.2;
+            background: rgba(10,13,20,0.78); border-color: #3a465f; border-radius: 999px;
+            opacity: 0; transition: opacity .12s; }
+    .shot-wrap:hover .play, .card.playing .play { opacity: 1; }
+    figcaption { padding: 6px 9px 8px; display: flex; flex-direction: column; gap: 1px; }
+    .name { font-weight: 600; }
+    .meta { color: #7d879c; font-size: 12px; }
+
+    /* The old contact sheet still lives here - it is what the backend drives. */
+    details { margin-top: 18px; border-top: 1px solid #1c2230; padding-top: 12px; }
+    summary { cursor: pointer; color: #8792a8; }
+    #sheet { max-width: 100%; border: 1px solid #262d3d; border-radius: 8px; margin-top: 10px; }
   </style>
 </head>
 <body>
-  <h1>Effect contact sheet</h1>
+  <p style="margin:0 0 10px"><a href="index.html" style="color:#8792a8">&larr; back to Imagine3D</a></p>
+  <h1>Effect gallery</h1>
+  <p class="lead">
+    Press play on any card — or <b>Play visible</b> — to see the effect running.
+    Pick a project and every card is driven by that song's analysis: its beat
+    grid, its band followers, its peak holds, exactly as in a render. Press
+    <b>Play audio</b> and the cards run in sync with what you are hearing, because
+    both read the same clock. Transitions sweep their wipe on a loop; post effects
+    are shown over a test image.
+  </p>
+
   <div class="controls">
+    <select id="project" title="Song whose analysis drives the cards"></select>
     <select id="kind">
       <option value="all">all kinds</option>
       <option value="scene2d">scene2d</option>
@@ -26,12 +67,32 @@
       <option value="transition">transition</option>
     </select>
     <select id="palette"></select>
-    <button id="go">Render sheet</button>
-    <button id="upload">Save to disk</button>
+    <button id="playVisible">Play visible</button>
+    <button id="stopAll">Stop all</button>
   </div>
-  <div id="status">idle</div>
-  <canvas id="sheet"></canvas>
-  <canvas id="work" style="display:none"></canvas>
+
+  <div class="controls">
+    <div class="transport">
+      <button id="audio" disabled>Play audio</button>
+      <input id="scrub" type="range" min="0" max="1000" value="0" title="Scrub the song">
+      <span class="clock" id="clock">0:00 / 0:00</span>
+      <span class="bpm" id="bpm">—</span>
+    </div>
+  </div>
+
+  <div id="status">loading…</div>
+  <div id="gallery"></div>
+
+  <details>
+    <summary>Contact sheet (one still of everything, saveable to disk)</summary>
+    <div class="controls" style="margin-top:10px">
+      <button id="go">Render sheet</button>
+      <button id="upload">Save to disk</button>
+      <span id="sheet-status"></span>
+    </div>
+    <canvas id="sheet"></canvas>
+  </details>
+
   <script type="module" src="ui/preview.js"></script>
 </body>
 </html>

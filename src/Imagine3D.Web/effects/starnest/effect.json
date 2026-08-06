@@ -14,7 +14,7 @@
   "description": "Flight through an infinite lattice of star clusters. Space is folded into a repeating tile and each sample is run through an inversion fractal; what is accumulated is the total change in orbit radius, which spikes into points of light. Volumetric, so the clusters pass through one another as you fly.",
   "shader": "shader.frag",
   "params": {
-    "speed": { "type": "float", "default": "1.0 + 1.1*energy", "min": 0, "max": 4 },
+    "speed": { "type": "float", "default": "0.50 + 0.45*energy", "min": 0, "max": 4 },
     "zoom": { "type": "float", "default": "0.8", "min": 0.2, "max": 2 },
     "tile": { "type": "float", "default": "0.85", "min": 0.2, "max": 2,
              "description": "Size of the repeating fold. Small values pack the clusters tighter." },

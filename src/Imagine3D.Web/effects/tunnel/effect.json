@@ -1,20 +1,31 @@
 {
   "id": "tunnel",
-  "name": "Texture tunnel",
+  "name": "Tunnel",
   "kind": "scene2d",
-  "tags": ["amiga", "retro", "psychedelic", "geometric", "space", "build", "tension"],
+  "tags": ["amiga", "retro", "psychedelic", "geometric", "space", "build", "tension", "scifi"],
   "energyRange": [0.25, 0.95],
-  "coverage": 0.43,
+  "coverage": 0.66,
   "aspects": ["16:9", "9:16"],
   "motion": "depth-in",
   "focus": "centre",
   "cost": "low",
-  "description": "The classic polar-mapped tunnel. Flight speed and twist track the music; the checker pattern flips on the bar.",
+  "description": "The polar tunnel — 1/r is depth, angle wraps the wall, and no geometry exists at all. Panelled walls whose cross-section pumps on the low end, strip lights running the length of it, hoops passing on the bar, sparks blowing past and a lit throat at the far end.",
   "shader": "shader.frag",
   "params": {
-    "speed": { "type": "float", "default": "0.4 + 1.2*energy + 0.6*beatPulse", "min": 0, "max": 5 },
+    "speed": { "type": "float", "default": "0.22 + 0.55*energy + 0.30*beatPulse", "min": 0, "max": 6 },
     "twist": { "type": "float", "default": "0.15 + 0.5*mid", "min": -2, "max": 2 },
-    "rings": { "type": "float", "default": "8.0", "min": 2, "max": 32 },
-    "wobble": { "type": "float", "default": "0.12 + 0.25*bass", "min": 0, "max": 1 }
+    "rings": { "type": "float", "default": "8.0", "min": 2, "max": 32,
+               "description": "Panels around the wall." },
+    "wobble": { "type": "float", "default": "0.12 + 0.25*bass", "min": 0, "max": 0.6,
+                "description": "How far the flight path curves off centre." },
+    "pulse": { "type": "float", "default": "1.0", "min": 0, "max": 3,
+               "description": "How hard the cross-section breathes on the low end. 0 gives a perfectly round tunnel, which is the old flat version." },
+    "strips": { "type": "float", "default": "6.0", "min": 2, "max": 24,
+                "description": "Strip lights running the length of the corridor. These are what the eye travels along." },
+    "sparks": { "type": "float", "default": "1.0", "min": 0, "max": 3,
+                "description": "Debris blowing down the tunnel." },
+    "disperse": { "type": "float", "default": "1.0", "min": 0, "max": 4,
+                  "description": "Per-channel offset of the wall's palette lookup. A little of it stops the far end reading as flat colour." },
+    "glow": { "type": "float", "default": "1.0 + 0.4*beatPulse", "min": 0, "max": 3 }
   }
 }

@@ -11,7 +11,7 @@
   "description": "Raindrop rings displace a folded fractal field. The source synthesised its own heartbeat to pulse the zoom; here the beat does it, so the rings land with the track.",
   "shader": "shader.frag",
   "params": {
-    "speed": { "type": "float", "default": "0.5 + 0.3*rms", "min": 0.05, "max": 2.0,
+    "speed": { "type": "float", "default": "0.28 + 0.16*rms", "min": 0.05, "max": 2.0,
               "description": "Rate of the fold rotation and drift." },
     "ripples": { "type": "float", "default": "1.0 + 0.6*high", "min": 0.0, "max": 3.0,
                 "description": "Strength of the expanding rings displacing the field." },

@@ -12,6 +12,8 @@
   .warn { color: #e8b04b; } .bad { color: #e8685b; }
 </style>
 <body>
+<p style="margin:0 0 10px"><a href="index.html" style="color:#8b93a1">&larr; back to Imagine3D</a>
+   &nbsp;·&nbsp; <a href="preview.html" style="color:#8b93a1">effect gallery</a></p>
 <h1>Effect probe</h1>
 <p class="lead">
   Measures the two things every scene manifest has to declare and nobody can
@@ -169,12 +171,18 @@ async function run() {
         : explained > 0.18 && (Math.abs(sx) > 1 || Math.abs(sy) > 1) ? 'planar'
         : 'churn';
 
-      const dCov = Math.abs(cov - (manifest.coverage ?? 0.6));
+      // Only a scene is measured against what it declares. A post pass is drawn
+      // over a *static* test image, so of course it does not move and of course
+      // its coverage is the test image's - flagging either would be the probe
+      // reporting on its own harness.
       const flags = [];
-      if (dCov > 0.10) flags.push(`declares coverage ${(manifest.coverage ?? 0.6).toFixed(2)}`);
-      if (isScene && manifest.motion && manifest.motion !== motion)
-        flags.push(`declares motion ${manifest.motion}`);
-      if (change < 0.012) flags.push('BARELY MOVES');
+      if (isScene) {
+        if (Math.abs(cov - (manifest.coverage ?? 0.6)) > 0.10)
+          flags.push(`declares coverage ${(manifest.coverage ?? 0.6).toFixed(2)}`);
+        if (manifest.motion && manifest.motion !== motion)
+          flags.push(`declares motion ${manifest.motion}`);
+        if (change < 0.012) flags.push('BARELY MOVES');
+      }
 
       rows.push(
         `coverage ${cov.toFixed(2)}  ${motion.padEnd(9)} change ${change.toFixed(3)} ` +

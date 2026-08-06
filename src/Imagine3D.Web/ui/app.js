@@ -2,6 +2,7 @@
 // All rendering work lives in engine/; this file only orchestrates and displays.
 
 import { CaptureClient } from '../engine/capture.js';
+import { ScenePreview } from './scenepreview.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -29,6 +30,12 @@ const state = {
   // it is not a generation - it has no chain to light up.
   trimOnly: false,
 };
+
+// Declared up here because renderStoryboard() invalidates it, and that runs
+// before the listener wiring further down the file would have created it.
+const scenePreview = new ScenePreview({
+  onError: (msgs) => showWarnings(msgs, true),
+});
 
 // ------------------------------------------------------------------ api
 
@@ -457,6 +464,8 @@ function renderStoryboard(sb) {
       <div class="idx">${s.index + 1}</div>
       <div class="time">${fmtTime(s.start)}–${fmtTime(s.end)}</div>
       <div>
+        <button class="scene-play" data-index="${s.index}"
+                title="Play this scene — its own post stack, over this part of the song">▶</button>
         <select class="eff-pick" data-index="${s.index}"
                 title="Swap the effect for this scene">${sceneOptions(sb, s)}</select>
         <span class="meta"> — ${escapeHtml(s.why)} · in via ${escapeHtml(s.transitionIn)}</span>
@@ -465,10 +474,16 @@ function renderStoryboard(sb) {
           <span class="chip">energy ${s.energy.toFixed(2)}</span>
           <span class="chip">${escapeHtml(s.sectionLabel)}</span>
         </div>
+        <div class="scene-shot" data-index="${s.index}"></div>
       </div>
     </div>`).join('');
 
   $('storyboard').scrollTop = scroll;
+
+  // The preview holds a compositor built from the plan that was on screen. This
+  // redraw means the plan changed, so that compositor is describing a video that
+  // no longer exists.
+  scenePreview.invalidate();
 }
 
 /// The effects this scene could use instead. Ordered by whether they suit the
@@ -534,6 +549,39 @@ async function replaceEffect(index, effectId) {
 $('storyboard').addEventListener('change', (e) => {
   const sel = e.target.closest('.eff-pick');
   if (sel) replaceEffect(Number(sel.dataset.index), sel.value);
+});
+
+// ------------------------------------------------------------ scene preview
+
+$('storyboard').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.scene-play');
+  if (!btn) return;
+
+  // The offline render owns the GPU and drives frames through this page. A
+  // preview competing for both would slow the render and stutter itself.
+  if (state.running) {
+    showWarnings(['Preview is unavailable while a render is running.'], false);
+    return;
+  }
+  if (!state.storyboard || !state.analysis) return;
+
+  const index = Number(btn.dataset.index);
+  const wasPlaying = scenePreview.index === index;
+
+  for (const b of document.querySelectorAll('.scene-play')) b.textContent = '▶';
+  if (!wasPlaying) btn.textContent = '❚❚';
+
+  const mp3 = state.detail?.mp3;
+  await scenePreview.toggle(index, {
+    analysis: state.analysis,
+    storyboard: state.storyboard,
+    mediaBase: state.detail?.mediaBase ?? '',
+    audioSrc: mp3 ? `${state.detail.mediaBase}/source/${encodeURIComponent(mp3)}` : null,
+  });
+
+  // Stopping for any reason - a failed load, the toggle closing it - has to put
+  // the button back, or the row claims to be playing something that is not.
+  if (!scenePreview.playing) btn.textContent = '▶';
 });
 
 // ------------------------------------------------------------------ result
@@ -745,6 +793,17 @@ function fmtTime(s) {
   const m = Math.floor(s / 60);
   const r = Math.floor(s % 60);
   return `${m}:${String(r).padStart(2, '0')}`;
+}
+
+// The dev pages are a normal navigation, which means leaving this one - and this
+// is the page the backend renders through. Walking away mid-render would drop
+// the channel and lose the run, so ask first.
+for (const a of document.querySelectorAll('.devlinks a')) {
+  a.addEventListener('click', (e) => {
+    if (!state.running) return;
+    if (!confirm('A render is running. Leaving this page will stop it. Leave anyway?'))
+      e.preventDefault();
+  });
 }
 
 // ------------------------------------------------------------------ boot

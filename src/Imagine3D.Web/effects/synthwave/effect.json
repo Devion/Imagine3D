@@ -13,7 +13,7 @@
   "description": "Low-poly terrain flown at speed under a banded sun. The height field is a triangulated value noise, so the ground is hard-faceted rather than smooth, and the same barycentric work yields the distance to each triangle edge — which is what the neon wireframe is drawn from, for free.",
   "shader": "shader.frag",
   "params": {
-    "speed": { "type": "float", "default": "0.8 + 0.9*energy", "min": 0, "max": 4 },
+    "speed": { "type": "float", "default": "0.35 + 0.35*energy", "min": 0, "max": 4 },
     "relief": { "type": "float", "default": "1.0 + 0.3*bass", "min": 0.2, "max": 3 },
     "wire": { "type": "float", "default": "0.9 + 0.5*high", "min": 0, "max": 3,
              "description": "Brightness of the neon edge on every triangle." },

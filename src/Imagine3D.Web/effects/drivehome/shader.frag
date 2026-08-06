@@ -59,7 +59,9 @@ float deltaSawTooth(float t) {
 // Returns a refraction offset, not a colour. One drop per cell, plus the trail it
 // leaves behind as it slides.
 vec2 getDrops(vec2 uv, float seed) {
-  float t = uTime;
+  // Rain slides at its own rate rather than the car's, but it is still the
+  // busiest thing in the frame, so it goes through the same knob.
+  float t = uTime * p_rainRate;
 
   uv.y += t * 0.05;
   uv *= vec2(10.0, 2.5) * 2.0;
@@ -248,9 +250,17 @@ void main() {
   vec3 headCol   = mix(vec3(0.8, 0.8, 1.0), pal(0.62), p_tint);
   vec3 tailCol   = mix(vec3(1.0, 0.1, 0.1), pal(0.0), p_tint);
 
-  // Suspension: a stepped random walk at 5Hz, cubed so most of the ride is smooth
-  // and the occasional bump is sharp.
-  float bt = uTime * 5.0;
+  // Suspension: a stepped random walk, cubed so most of the ride is smooth and
+  // the occasional bump is sharp.
+  //
+  // 2.2Hz, not the 5 it was: a 5Hz stepped walk under a slow drive is most of
+  // why this read as frantic.
+  //
+  // Fixed, deliberately - `shake` is an amplitude and its default rides the bass
+  // up to 3.5, so routing the rate through it too would put the jitter at 7Hz on
+  // every kick. A car's suspension does not resonate faster when the road gets
+  // rougher; it moves further.
+  float bt = uTime * 2.2;
   float bumps = mix(hash1(floor(bt)), hash1(floor(bt + 1.0)), fract(bt)) * 0.1;
   bumps = bumps * bumps * bumps * p_shake;
 

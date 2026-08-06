@@ -39,7 +39,11 @@ void main() {
 
         float seed = hash12(id);
         // Each drop runs its own 0..1 life at its own rate.
-        float life = fract(uTime * (0.3 + seed * 0.2) + seed);
+        // Through `t`, not uTime. This is the expanding wavefront - the fastest
+        // moving thing on screen - and it used to ignore `speed` entirely, so
+        // turning the effect down left the ripples running at full rate and the
+        // parameter looked broken.
+        float life = fract(t * (0.55 + 0.35 * seed) + seed);
 
         vec2 jitter = off + vec2(fract(seed * 34.23) - 0.5, fract(seed * 89.45) - 0.5);
         vec2 r = local - jitter;

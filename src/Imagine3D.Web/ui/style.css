@@ -56,6 +56,17 @@ body {
 
 .project-picker { display: flex; gap: 8px; align-items: center; }
 
+.devlinks { display: flex; gap: 6px; align-items: center; margin-right: 10px; }
+.devlinks a {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--muted);
+  text-decoration: none;
+}
+.devlinks a:hover { color: var(--text); background: var(--panel); }
+
 .conn {
   font-size: 12px;
   padding: 3px 10px;
@@ -296,6 +307,34 @@ input[type="range"] { flex: 1; accent-color: var(--accent); }
 }
 .scene .eff-pick:hover, .scene .eff-pick:focus { border-color: var(--accent); outline: none; }
 .scene.locked .eff-pick { border-color: var(--warn); }
+/* Preview button and the panel it opens, inline in the row - the decision about
+   an effect gets made here, so the evidence for it belongs here too. */
+.scene .scene-play {
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 7px;
+  margin-right: 4px;
+  border-radius: 5px;
+  border: 1px solid #2c3547;
+  background: #1a2231;
+  color: var(--muted);
+  cursor: pointer;
+  vertical-align: middle;
+}
+.scene .scene-play:hover { color: var(--text); border-color: var(--accent); }
+
+.scene .scene-shot { display: none; margin-top: 7px; }
+.scene .scene-shot.open { display: block; }
+.scene .scene-canvas {
+  width: 100%;
+  max-width: 448px;
+  height: auto;
+  display: block;
+  border-radius: 6px;
+  border: 1px solid #2c3547;
+  background: #000;
+}
+
 .scene .chips { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 3px; }
 .scene .chip {
   font-size: 10.5px; padding: 1px 7px; border-radius: 999px;

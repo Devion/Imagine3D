@@ -365,14 +365,55 @@ here before being caught by the contact sheet:
 
 ### Seeing what you made
 
+**A play button on every scene in the storyboard.** This is where the decision
+about an effect actually gets made — you are reading the plan, scene 7 says
+`kaliset`, and the question is whether to change it. Pressing play opens a
+preview under that row, running that scene over that part of the song.
+
+It uses the real compositor rather than drawing the shader on its own, so what
+you see is what will render: the scene, then *its own post stack*, then the
+transition it comes in through, then the lyric layer. Previewing the bare effect
+would answer a different question and quietly mislead — most scenes carry two or
+three post passes, and pixelate over kaliset is not kaliset. It starts a moment
+before the scene so the transition into it is part of what you see, loops the
+scene's window, and plays the song underneath it.
+
+One canvas and one GL context for the whole list, moved into whichever row is
+playing. It is thrown away and rebuilt whenever the plan changes, because a
+preview built from the previous plan is the one thing a preview must never be.
+
+**`preview.html` — the effect gallery.** A card per effect with a play button.
+Press play and it runs; press **Play visible** and everything on screen runs at
+once. This is the page to open when you want to know what an effect *does*, which
+a still cannot tell you: how fast it is, how hard it lands on the beat, whether
+it travels or just sits there being busy.
+
+Every card is driven by a real song. Pick a project and the analysis behind it
+feeds `Modulation` exactly as it does in a render — same beat grid, same band
+followers, same peak holds — so an effect bound to `beatPulse` punches on the
+same beats it will punch on in the video. Press **Play audio** and the cards are
+in sync with what you are hearing, because both read `audio.currentTime`. With no
+project selected it falls back to a plain 124 BPM metronome and says so.
+
+Transitions sweep their wipe on a loop rather than sitting at one frozen slice,
+and post effects are shown over a test image, so all 90 effects are legible and
+not just the scenes. Deep links work: `preview.html?kind=raymarch&play=tunnel&t=42`.
+
+One WebGL context serves the whole page — ninety is past what a browser will
+give you, and would be ninety copies of every compiled shader. Cards that are
+playing but scrolled out of view are skipped rather than stopped, so "play
+everything" costs a screenful however far the list runs.
+
+**`probe.html`** measures `coverage` and `motion`; see above.
+
 ```
 POST /api/devsheet?kind=all&palette=neon
 ```
 
-Renders every effect into a labelled contact sheet and writes it to
-`%TEMP%\imagine3d-shots\`. `preview.html` is the interactive version. This is the
-fastest way to check a new shader, and it reloads the page first so edits to the
-engine modules take effect.
+Renders every effect into one labelled contact sheet and writes it to
+`%TEMP%\imagine3d-shots\` — the same sheet is available at the bottom of
+`preview.html`. Useful for reviewing the whole library at a glance or attaching
+to a note; the gallery is the better tool for judging any single effect.
 
 ---
 
