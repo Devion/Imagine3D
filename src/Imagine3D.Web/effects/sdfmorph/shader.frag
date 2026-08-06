@@ -113,8 +113,12 @@ void main() {
   // Orbit, plus a dolly that pushes in over each phrase and a slow roll. The old
   // camera held one distance for the whole video and left the mass sitting in a
   // frame three times its size.
+  // Closer than it wants to be. The mass is the subject, and at 2.75 units it
+  // sat comfortably inside the frame with a margin of sky all the way round -
+  // which is a product shot. Held nearer, the satellites swing out through the
+  // edges of the picture and the chrome carries the corners.
   float orbit = uTime * 0.15;
-  float dist = 2.75 - 0.35 * sin(uPhrase * TAU) - 0.15 * uBeatPulse;
+  float dist = 2.05 - 0.30 * sin(uPhrase * TAU) - 0.15 * uBeatPulse;
   vec3 ro = vec3(sin(orbit) * dist, 0.55 + sin(uTime * 0.21) * 0.45, cos(orbit) * dist);
   mat3 cam = lookAt(ro, vec3(0.0, 0.05 * sin(uTime * 0.17), 0.0), sin(uTime * 0.08) * 0.12);
   vec3 rd = normalize(cam * vec3(uv, 1.55 + 0.12 * uBeatPulse));
@@ -185,6 +189,6 @@ void main() {
   col += aura * p_glow;
 
   col *= 0.90 + 0.30 * uBeatPulse;
-  col *= 1.0 - 0.30 * pow(clamp(length(uv * vec2(0.5, 0.8)), 0.0, 1.0), 2.4);
+  col *= 1.0 - 0.14 * pow(clamp(length(uv * vec2(0.4, 0.6)), 0.0, 1.0), 2.6);
   fragColor = vec4(max(col, 0.0), 1.0);
 }

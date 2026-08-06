@@ -25,7 +25,12 @@ void main() {
   vec2 uv = centered(vUv, uAspect);
   float t = uTime * p_speed;
 
-  vec3 ro = vec3(0.0, 0.0, -3.0);
+  // Flying through the bank, not hovering in front of it. Held still, this
+  // measured as the second-slowest effect in the library - the cloud evolved in
+  // place, which over a twenty-second scene reads as a photograph with a bit of
+  // shimmer on it. The volume is already sampled in world space, so a moving
+  // origin is the whole of the fix.
+  vec3 ro = vec3(sin(t * 0.13) * 1.2, sin(t * 0.09) * 0.6, -3.0 + t * p_drift);
   vec3 rd = normalize(vec3(uv, 1.35));
 
   // Slow drift so the camera never sits still.

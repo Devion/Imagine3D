@@ -47,7 +47,15 @@ float map(vec3 p) {
   vec3 q = abs(p);
 
   // Surface relief on the walls, so they are not flat slabs.
-  float relief = abs(length(sin(q * cos(q.yzx / 30.0) * 4.0) / (q * 4.0)));
+  //
+  // The floor here is not cosmetic. p.xy is measured relative to the corridor
+  // centre, and the very first sample of every ray is taken at the camera, which
+  // rides that centre exactly - so q.x and q.y are both zero on step one of every
+  // pixel. Dividing by q then produced an infinity, the relief came back as one,
+  // the distance as minus infinity, and the march advanced by NaN. NaN fails
+  // every comparison, so the loop neither hit anything nor terminated, and the
+  // whole effect rendered black on every frame.
+  float relief = abs(length(sin(q * cos(q.yzx / 30.0) * 4.0) / max(q * 4.0, 1e-3)));
 
   float tunnel = min(64.0 - q.x - q.y + walls, 32.0 - q.y - walls);
   float d = max(min(walls, floorPlane), tunnel) - relief;
@@ -74,7 +82,10 @@ void main() {
   vec3 rd = normalize(rolled.x * side + rolled.y * up + fwd);
 
   vec3 col = vec3(0.0);
-  float d = 0.0;
+  // Not zero: the camera sits on the corridor centre line, which is the one
+  // place the wall relief above is degenerate. Starting a step in also means the
+  // first sample says something about the scene rather than about the lens.
+  float d = 0.35;
   float s = 1.0;
 
   for (int i = 0; i < 110; i++) {
@@ -86,16 +97,26 @@ void main() {
     // 1/distance sums - enormous numbers, normalised once at the end.
     // Walls contribute much less than the strands - they are there to give the
     // corridor shape, not to light it.
-    col += gLight + palClamp(0.45) / max(s, 0.35);
+    // The strands are the picture; the walls are there so it has somewhere to
+    // happen. Weighted accordingly - at parity the wall term is a flat wash
+    // across the whole frame and the neon disappears into it.
+    col += gLight * 2.4 + palClamp(0.45) * 0.35 / max(s, 0.35);
     if (d > 900.0) break;
   }
 
   // How far the ray travelled matters: dividing by `d` is what makes distant
-  // corridor dim instead of every pixel saturating. The scale is calibrated to
-  // the actual accumulator range here (order 10^3 over 110 steps), and tanh
-  // rolls the highlights off instead of clipping them.
-  col = tanh(col * p_glow * 0.00035 / max(1.0, d * 0.02));
+  // corridor dim instead of every pixel saturating, and tanh rolls the
+  // highlights off instead of clipping them.
+  //
+  // Both numbers here were recalibrated once the NaN above was fixed, because
+  // until then this shader rendered black on every frame and there was nothing
+  // to calibrate against. The accumulator runs to order 10^3 only for a ray that
+  // passes close to a strand; an ordinary one down the middle of the corridor
+  // collects a few tens, and against the old 1/(d*0.02) that came out at a
+  // thousandth of full scale. The distance term is now gentle enough that the
+  // corridor walls are visible for the whole length of the shot.
+  col = tanh(col * p_glow * 0.0022 / max(1.0, d * 0.010));
 
   col *= 0.9 + 0.35 * uBeatPulse;
-  fragColor = vec4(col, 1.0);
+  fragColor = vec4(max(col, 0.0), 1.0);
 }

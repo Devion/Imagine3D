@@ -12,10 +12,10 @@
     "density": { "type": "float", "default": "0.75 + 0.4*rms", "min": 0, "max": 2 },
     "speed": { "type": "float", "default": "1.0 + 0.8*energy", "min": 0, "max": 4 },
     "angle": { "type": "float", "default": "0.06", "min": 0, "max": 1,
-               "description": "Wind direction, 0..1 mapped over half a turn. Near 0 is a hard cross-frame drive." },
+              "description": "Wind direction, 0..1 mapped over half a turn. Near 0 is a hard cross-frame drive." },
     "smear": { "type": "float", "default": "1.0 + 0.6*onset", "min": 0, "max": 3,
-               "description": "How far the sand drags the image along the wind." },
+              "description": "How far the sand drags the image along the wind." },
     "grit": { "type": "float", "default": "0.8 + 0.5*high", "min": 0, "max": 2,
-              "description": "Individual grains catching the light." }
+             "description": "Individual grains catching the light." }
   }
 }

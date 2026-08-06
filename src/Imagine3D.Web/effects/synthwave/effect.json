@@ -4,8 +4,10 @@
   "kind": "raymarch",
   "tags": ["retro", "vast", "cinematic", "geometric", "structure", "dream", "glow", "space"],
   "energyRange": [0.15, 0.85],
-  "coverage": 0.72,
+  "coverage": 0.62,
   "aspects": ["16:9", "9:16"],
+  "motion": "depth-in",
+  "focus": "horizon",
   "cost": "high",
   "rarity": 0.9,
   "description": "Low-poly terrain flown at speed under a banded sun. The height field is a triangulated value noise, so the ground is hard-faceted rather than smooth, and the same barycentric work yields the distance to each triangle edge — which is what the neon wireframe is drawn from, for free.",
@@ -14,9 +16,9 @@
     "speed": { "type": "float", "default": "0.8 + 0.9*energy", "min": 0, "max": 4 },
     "relief": { "type": "float", "default": "1.0 + 0.3*bass", "min": 0.2, "max": 3 },
     "wire": { "type": "float", "default": "0.9 + 0.5*high", "min": 0, "max": 3,
-              "description": "Brightness of the neon edge on every triangle." },
+             "description": "Brightness of the neon edge on every triangle." },
     "pulse": { "type": "float", "default": "0.7 + 0.8*sub", "min": 0, "max": 3,
-               "description": "How hard the bass pushes the whole field down and back up." },
+              "description": "How hard the bass pushes the whole field down and back up." },
     "steps": { "type": "float", "default": "80.0", "min": 24, "max": 140 }
   }
 }

@@ -1,0 +1,206 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Effect probe</title>
+<style>
+  body { margin: 0; padding: 16px; background: #14161a; color: #d8dde6;
+         font: 13px ui-monospace, Menlo, Consolas, monospace; }
+  h1 { font-size: 15px; margin: 0 0 4px; }
+  p.lead { margin: 0 0 14px; color: #8b93a1; max-width: 90ch; }
+  button, select { background: #232833; color: #d8dde6; border: 1px solid #39404e;
+                   padding: 5px 10px; border-radius: 4px; font: inherit; }
+  pre { margin: 14px 0 0; line-height: 1.45; white-space: pre; }
+  .warn { color: #e8b04b; } .bad { color: #e8685b; }
+</style>
+<body>
+<h1>Effect probe</h1>
+<p class="lead">
+  Measures the two things every scene manifest has to declare and nobody can
+  eyeball reliably: <b>coverage</b> — how much of the frame the effect lights up,
+  which the director uses to decide whether a boundary can be cut or has to be
+  dissolved — and <b>motion</b> — what the picture actually does, which decides
+  which effects can flow into which. Paste the numbers it prints into
+  <code>effect.json</code>. See Flow.cs for what the motion classes mean.
+</p>
+<p class="lead">
+  <b>Coverage is authoritative; motion is a screen.</b> Coverage is measured
+  directly and a disagreement over about 0.10 means the manifest is wrong. Motion
+  is inferred by fitting a centred zoom and a translation to two frames a third
+  of a second apart, and that model only sees head-on travel: a corridor flight
+  with the camera off-axis or rolling, or a field of points too sparse for a warp
+  to align, both come back as <code>churn</code> however plainly they are flights.
+  So a <span class="warn">declares motion</span> flag is a prompt to go and look
+  at the effect, not a verdict — several in this library are correct as declared
+  and the probe is the thing that is wrong. <code>BARELY MOVES</code> is the flag
+  that is always worth acting on.
+</p>
+<button id="go">Run</button>
+<select id="kind">
+  <option value="scene">scene effects</option>
+  <option value="all">everything</option>
+</select>
+<pre id="out">idle</pre>
+
+<script type="module">
+import { createGL, createQuad, RenderTarget } from './engine/gl.js';
+import { FragmentEffect, compileSceneParams, evalParams } from './engine/registry.js';
+import { getPalette } from './engine/palettes.js';
+
+const out = document.getElementById('out');
+const W = 256, H = 144;
+
+const canvas = document.createElement('canvas');
+canvas.width = W; canvas.height = H;
+const gl = createGL(canvas);
+const quad = createQuad(gl);
+const target = new RenderTarget(gl, W, H);
+const blank = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, blank);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+  new Uint8Array([0, 0, 0, 255]));
+const buf = new Uint8Array(W * H * 4);
+
+/// Mid-energy music, and deliberately *constant* between the two frames of a
+/// motion pair - a beat pulse decaying across the pair would show up as
+/// brightness change and be scored as movement.
+function mod(t) {
+  return {
+    t, sceneT: 0.5, sectionT: 0.5, clipT: 0,
+    beat: (t * 2) % 1, bar: (t * 0.5) % 1, phrase: (t * 0.125) % 1,
+    beatPulse: 0.45, barPulse: 0.5, beatStrength: 0.8,
+    onset: 0.45, rms: 0.58, energy: 0.62, index: 0, rmsPeak: 0.72,
+    sub: 0.66, bass: 0.71, lowMid: 0.58, mid: 0.52, high: 0.47, air: 0.38,
+    subPeak: 0.78, bassPeak: 0.83, lowMidPeak: 0.70, midPeak: 0.64,
+    highPeak: 0.59, airPeak: 0.48, bands: {},
+  };
+}
+
+function luma(inst, compiled, palette, t) {
+  const m = mod(t);
+  target.bind(); target.clear();
+  gl.disable(gl.DEPTH_TEST);
+  inst.render({ width: W, height: H, mod: m, palette, seed: 0.618, amount: 1, blendMode: 0 },
+    evalParams(compiled, m),
+    { prev: blank, next: blank, feedback: blank, video: blank, text: blank, videoAmount: 0 },
+    quad);
+  gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+  const l = new Float32Array(W * H);
+  for (let i = 0, p = 0; i < buf.length; i += 4, p++)
+    l[p] = (0.2126 * buf[i] + 0.7152 * buf[i + 1] + 0.0722 * buf[i + 2]) / 255;
+  return l;
+}
+
+/// 0.6 * the fraction of the frame meaningfully above its own darkest tenth,
+/// plus 0.4 * mean luminance. Neither half is enough alone: `water` is a
+/// full-frame ripple with almost no local contrast, `ifsmorph` a small solid on
+/// a bright wash.
+function coverage(l) {
+  const sorted = Float32Array.from(l).sort();
+  const floor = sorted[Math.floor(sorted.length * 0.10)];
+  let mean = 0, lit = 0;
+  for (const v of l) { mean += v; if (v > floor + 0.04) lit++; }
+  return 0.6 * (lit / l.length) + 0.4 * (mean / l.length);
+}
+
+const at = (f, x, y) => f[Math.max(0, Math.min(H - 1, Math.round(y))) * W
+                        + Math.max(0, Math.min(W - 1, Math.round(x)))];
+
+/// Mean |b - warp(a)| where warp zooms about the centre then shifts. A border is
+/// skipped: warped samples there come from off-frame and are clamped.
+function residual(a, b, z, dx, dy) {
+  let sum = 0, n = 0;
+  for (let y = 10; y < H - 10; y += 2)
+    for (let x = 10; x < W - 10; x += 2) {
+      sum += Math.abs(b[y * W + x]
+             - at(a, (x - W / 2) / z + W / 2 - dx, (y - H / 2) / z + H / 2 - dy));
+      n++;
+    }
+  return sum / n;
+}
+
+async function run() {
+  const wantScene = document.getElementById('kind').value === 'scene';
+  out.textContent = 'loading registry…';
+
+  const manifests = await (await fetch('api/effects', { cache: 'reload' })).json();
+  const rows = [];
+
+  for (const manifest of manifests.sort((a, b) => a.id.localeCompare(b.id))) {
+    const isScene = ['scene2d', 'scene3d', 'raymarch'].includes(manifest.kind);
+    if (wantScene && !isScene) continue;
+    if (manifest.module) { rows.push(`SKIP      ${manifest.id} (js module)`); continue; }
+
+    out.textContent = `measuring ${manifest.id}…`;
+    await new Promise((r) => setTimeout(r, 0));
+
+    try {
+      const inst = await FragmentEffect.create(gl, manifest);
+      const compiled = compileSceneParams(manifest, null);
+
+      let cov = 0, covN = 0, change = 0, explained = 0, zoom = 0, sx = 0, sy = 0, mN = 0;
+
+      for (const pal of ['frost', 'ember']) {
+        const palette = getPalette(pal);
+        for (const t of [3.1, 11.7, 24.3, 41.9]) { cov += coverage(luma(inst, compiled, palette, t)); covN++; }
+      }
+      for (const t of [7.3, 19.1, 33.7]) {
+        const palette = getPalette('neon');
+        const a = luma(inst, compiled, palette, t);
+        const b = luma(inst, compiled, palette, t + 0.33);
+        const base = residual(a, b, 1, 0, 0);
+        let lo = base, lz = 1, ldx = 0, ldy = 0;
+        for (const z of [0.90, 0.94, 0.97, 1.03, 1.06, 1.10, 1.16, 1.24]) {
+          const r = residual(a, b, z, 0, 0);
+          if (r < lo) { lo = r; lz = z; ldx = 0; ldy = 0; }
+        }
+        for (const dx of [-6, -3, 3, 6]) for (const dy of [-4, -2, 2, 4]) {
+          const r = residual(a, b, 1, dx, dy);
+          if (r < lo) { lo = r; lz = 1; ldx = dx; ldy = dy; }
+        }
+        change += base; explained += (base - lo) / Math.max(1e-4, base);
+        zoom += lz; sx += ldx; sy += ldy; mN++;
+      }
+      inst.dispose();
+
+      cov /= covN; change /= mN; explained /= mN; zoom /= mN; sx /= mN; sy /= mN;
+
+      const motion =
+        change < 0.012 ? 'still'
+        : explained > 0.18 && Math.abs(zoom - 1) > 0.02 ? (zoom > 1 ? 'depth-in' : 'depth-out')
+        : explained > 0.18 && (Math.abs(sx) > 1 || Math.abs(sy) > 1) ? 'planar'
+        : 'churn';
+
+      const dCov = Math.abs(cov - (manifest.coverage ?? 0.6));
+      const flags = [];
+      if (dCov > 0.10) flags.push(`declares coverage ${(manifest.coverage ?? 0.6).toFixed(2)}`);
+      if (isScene && manifest.motion && manifest.motion !== motion)
+        flags.push(`declares motion ${manifest.motion}`);
+      if (change < 0.012) flags.push('BARELY MOVES');
+
+      rows.push(
+        `coverage ${cov.toFixed(2)}  ${motion.padEnd(9)} change ${change.toFixed(3)} ` +
+        `explained ${(explained * 100).toFixed(0).padStart(3)}%  zoom ${zoom.toFixed(2)}  ` +
+        `${manifest.id.padEnd(16)} ${flags.join('; ')}`);
+    } catch (err) {
+      rows.push(`FAIL      ${manifest.id}: ${String(err.message).split('\n')[0]}`);
+    }
+  }
+
+  out.textContent = rows.join('\n');
+}
+
+const go = () => run()
+  .then(() => { document.title = 'probe done'; })
+  .catch((e) => { out.textContent = `error: ${e.message}`; document.title = 'probe failed'; });
+
+document.getElementById('go').addEventListener('click', go);
+
+// ?auto=1 runs on load, so the probe can be driven from a headless browser and
+// its output scraped - which is the only way this gets run often enough to keep
+// the declared numbers honest.
+const q = new URLSearchParams(location.search);
+if (q.get('auto')) {
+  if (q.get('kind')) document.getElementById('kind').value = q.get('kind');
+  go();
+}
+</script>
+</body>

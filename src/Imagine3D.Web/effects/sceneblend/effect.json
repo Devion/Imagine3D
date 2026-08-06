@@ -5,7 +5,10 @@
   "tags": ["utility"],
   "energyRange": [0, 1],
   "cost": "low",
-  "description": "Composites the incoming scene over the outgoing one with the storyboard's blend mode. This is what lets two effects run layered instead of one cutting to the other.",
+  "description": "Composites the incoming scene over the outgoing one with the storyboard's blend mode, crossfading the base underneath so the boundary flows instead of cutting. This is what lets two effects run layered instead of one cutting to the other.",
   "shader": "shader.frag",
-  "params": {}
+  "params": {
+    "reveal": { "type": "float", "default": "1.0", "min": 0, "max": 1,
+               "description": "Which scene the frame settles on under the layer. Driven by the renderer, not the storyboard: 0 at the cut, 1 once the incoming scene has taken over." }
+  }
 }

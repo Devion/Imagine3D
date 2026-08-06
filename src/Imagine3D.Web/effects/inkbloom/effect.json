@@ -4,8 +4,10 @@
   "kind": "scene2d",
   "tags": ["organic", "fluid", "dream", "calm", "abstract", "water", "intimate", "psychedelic"],
   "energyRange": [0.0, 0.65],
-  "coverage": 0.37,
+  "coverage": 0.3,
   "aspects": ["16:9", "9:16"],
+  "motion": "churn",
+  "focus": "spread",
   "cost": "medium",
   "description": "Drops of ink released into still water: each bloom spreads on a diffusion curve, its boundary growing tendrils as it goes, and stacks with the others as pigment rather than paint. Slow and quiet — for intros, verses and comedowns.",
   "shader": "shader.frag",
@@ -13,10 +15,10 @@
     "drops": { "type": "float", "default": "6.0", "min": 1, "max": 8 },
     "spread": { "type": "float", "default": "0.75 + 0.25*rms", "min": 0.1, "max": 2 },
     "feather": { "type": "float", "default": "0.28", "min": 0.02, "max": 1,
-                 "description": "How soft the diffusion front is, as a fraction of the bloom's radius." },
+                "description": "How soft the diffusion front is, as a fraction of the bloom's radius." },
     "flow": { "type": "float", "default": "0.35 + 0.3*lowMid", "min": 0, "max": 1.5,
-              "description": "Warp of the whole plane — the water moving, not the ink." },
+             "description": "Warp of the whole plane — the water moving, not the ink." },
     "ink": { "type": "float", "default": "0.9 + 0.3*bass", "min": 0.1, "max": 2 },
-    "speed": { "type": "float", "default": "0.5 + 0.5*energy", "min": 0.05, "max": 2 }
+    "speed": { "type": "float", "default": "1.1 + 1.0*energy", "min": 0.05, "max": 2 }
   }
 }

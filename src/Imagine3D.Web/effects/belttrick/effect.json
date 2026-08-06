@@ -4,52 +4,24 @@
   "kind": "raymarch",
   "tags": ["geometric", "structure", "mechanical", "showcase", "scifi", "abstract", "space"],
   "energyRange": [0.25, 0.9],
-  "coverage": 0.63,
+  "coverage": 0.58,
+  "motion": "churn",
+  "focus": "centre",
   "cost": "high",
   "description": "An infinite lattice of cubes joined by six ribbons, spinning through 720 degrees and untangling itself - the Dirac belt trick. The ribbons never break because the rotation is applied as a spinor, so a full double turn returns to the identity.",
   "shader": "shader.frag",
   "params": {
-    "cycle": {
-      "type": "float",
-      "default": "16.0",
-      "min": 4.0,
-      "max": 40.0,
-      "description": "Seconds for one full 720-degree untangle. Shorter reads as frantic; the geometry needs time to be legible."
-    },
-    "orbit": {
-      "type": "float",
-      "default": "0.06",
-      "min": 0.0,
-      "max": 0.6,
-      "description": "Camera orbit speed around the lattice."
-    },
-    "distance": {
-      "type": "float",
-      "default": "9.5",
-      "min": 4.0,
-      "max": 18.0,
-      "description": "Camera distance. Further back shows more cells of the lattice."
-    },
-    "steps": {
-      "type": "float",
-      "default": "220.0",
-      "min": 60.0,
-      "max": 320.0,
-      "description": "March steps. The twist makes this field far from a true distance function, so it needs a lot of them."
-    },
-    "fog": {
-      "type": "float",
-      "default": "0.1",
-      "min": 0.0,
-      "max": 0.4,
-      "description": "Depth haze. This is what keeps the infinite lattice from reading as visual noise."
-    },
-    "tint": {
-      "type": "float",
-      "default": "0.45",
-      "min": 0.0,
-      "max": 1.0,
-      "description": "Blend the per-axis ribbon colours toward the project palette. The cube faces stay keyed so the rotation remains readable."
-    }
+    "cycle": { "type": "float", "default": "16.0", "min": 4.0, "max": 40.0,
+              "description": "Seconds for one full 720-degree untangle. Shorter reads as frantic; the geometry needs time to be legible." },
+    "orbit": { "type": "float", "default": "0.06", "min": 0.0, "max": 0.6,
+              "description": "Camera orbit speed around the lattice." },
+    "distance": { "type": "float", "default": "9.5", "min": 4.0, "max": 18.0,
+                 "description": "Camera distance. Further back shows more cells of the lattice." },
+    "steps": { "type": "float", "default": "220.0", "min": 60.0, "max": 320.0,
+              "description": "March steps. The twist makes this field far from a true distance function, so it needs a lot of them." },
+    "fog": { "type": "float", "default": "0.1", "min": 0.0, "max": 0.4,
+            "description": "Depth haze. This is what keeps the infinite lattice from reading as visual noise." },
+    "tint": { "type": "float", "default": "0.45", "min": 0.0, "max": 1.0,
+             "description": "Blend the per-axis ribbon colours toward the project palette. The cube faces stay keyed so the rotation remains readable." }
   }
 }

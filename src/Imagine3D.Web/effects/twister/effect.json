@@ -1,18 +1,24 @@
 {
   "id": "twister",
-  "name": "Twister",
+  "name": "Twister forest",
   "kind": "scene2d",
-  "tags": ["amiga", "retro", "geometric", "mechanical", "showcase"],
-  "energyRange": [0.2, 0.8],
-  "coverage": 0.15,
+  "tags": ["amiga", "retro", "geometric", "mechanical", "showcase", "structure", "city"],
+  "energyRange": [0.2, 0.85],
+  "coverage": 0.53,
   "aspects": ["16:9", "9:16"],
+  "motion": "depth-in",
+  "focus": "spread",
   "cost": "low",
-  "description": "The rotating twisted column — four shaded faces whose vertical twist rate rides the music.",
+  "description": "A forest of twisted columns walked through in perspective — the Amiga twister instanced down a corridor over a grid floor, each column at its own depth, twisting at its own rate and sinking into the fog.",
   "shader": "shader.frag",
   "params": {
-    "twist": { "type": "float", "default": "2.4 + 1.6*mid", "min": 0, "max": 8 },
+    "twist": { "type": "float", "default": "2.4 + 1.6*mid", "min": 0, "max": 8,
+              "description": "Twist per unit of height. Far columns show more of it, because more of their height fits on screen." },
     "spin": { "type": "float", "default": "0.9 + 0.6*energy", "min": -4, "max": 4 },
-    "width": { "type": "float", "default": "0.34 + 0.06*beatPulse", "min": 0.05, "max": 0.8 },
-    "wobble": { "type": "float", "default": "0.06", "min": 0, "max": 0.5 }
+    "width": { "type": "float", "default": "0.34 + 0.06*beatPulse", "min": 0.05, "max": 0.8,
+              "description": "Column half-width in world units." },
+    "wobble": { "type": "float", "default": "0.06", "min": 0, "max": 0.5 },
+    "walk": { "type": "float", "default": "0.5 + 0.9*energy", "min": 0, "max": 4,
+             "description": "How fast the camera walks through the forest. 0 holds still; above ~2 the columns strobe past." }
   }
 }

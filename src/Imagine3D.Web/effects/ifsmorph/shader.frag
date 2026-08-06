@@ -66,14 +66,20 @@ void main() {
   vec2 uv = centered(vUv, uAspect) * 0.5;
   float t = uTime * p_spin;
 
-  // Orbit radius 5.5, not the reference's 2.8: the widest fold preset puts the
-  // attractor's extent near 3, so at 2.8 the camera ends up inside the solid and
-  // the frame fills with its interior.
-  vec3 ro = vec3(5.5 * cos(t * 0.3), 2.4 + 1.0 * sin(t * 0.2), 5.5 * sin(t * 0.3));
+  // Orbit radius 4.2, not the reference's 2.8: the widest fold preset puts the
+  // attractor's extent near 3, so much closer than this and the camera ends up
+  // inside the solid and the frame fills with its interior.
+  //
+  // The focal length carries the rest. At 5.5 units behind a focal length of 1.2
+  // this saw about 8 units across and drew a solid 3 across in the middle of it,
+  // which is a specimen on a slide. 4.2 units behind a focal length of 2.2 sees
+  // about 3.4, so the solid runs out past the edges of the frame and the camera
+  // is close enough for its own orbit to read as parallax over the faces.
+  vec3 ro = vec3(4.6 * cos(t * 0.3), 2.1 + 0.9 * sin(t * 0.2), 4.6 * sin(t * 0.3));
   vec3 ww = normalize(-ro);
   vec3 uu = normalize(cross(ww, vec3(0.0, 1.0, 0.0)));
   vec3 vv = cross(uu, ww);
-  vec3 rd = normalize(uv.x * uu + uv.y * vv + 1.2 * ww);
+  vec3 rd = normalize(uv.x * uu + uv.y * vv + 1.85 * ww);
 
   // Cycle the fold parameters between four presets. The smoothstep on the
   // fractional part holds each preset for a while instead of morphing linearly
@@ -119,8 +125,12 @@ void main() {
     dist += d * 0.6;
   }
 
-  vec3 col = palClamp(0.04) * (1.0 - length(uv) * 0.5);
-  col += palClamp(0.72) * glow * 0.03 * p_glow;
+  // The space around it. Near-black behind a solid that only covers part of the
+  // frame leaves the rest of the shot doing nothing; a lit gradient plus the
+  // structure's own glow bleeding into it means the corners still carry the
+  // scene when the attractor shrinks on a morph.
+  vec3 col = mix(palClamp(0.20), palClamp(0.01), sat(length(uv) * 1.5)) * 0.55;
+  col += palClamp(0.72) * glow * 0.045 * p_glow;
 
   // Stars from a product of sines: cheap, and dense enough at this exponent.
   vec3 bg = rd * 15.0;

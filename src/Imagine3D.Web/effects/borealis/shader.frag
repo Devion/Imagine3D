@@ -181,7 +181,10 @@ void main() {
 
   vec2 cameraPlane = vec2((uv.x - 0.5) * horizontalScale, mix(0.02, 0.54, uv.y));
 
-  vec3 ro = vec3(0.0, 0.0, -6.7);
+  // Drifting forward and sideways. Static, the curtain only ever evolved in
+  // place; the march reads a world-space field, so moving the eye is enough to
+  // turn that evolution into travel.
+  vec3 ro = vec3(sin(uTime * 0.06) * 1.6, 0.0, -6.7 + uTime * p_drift);
   vec3 rd = normalize(vec3(cameraPlane, 1.25));
 
   float evolution = uTime * 0.05 * p_speed;

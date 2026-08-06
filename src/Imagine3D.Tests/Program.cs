@@ -23,6 +23,9 @@ static class Program
         if (args.Length > 0 && args[0] == "--variety")
             return VarietyReport(args.Skip(1).ToArray());
 
+        if (args.Length > 0 && args[0] == "--flow")
+            return FlowReport(args.Skip(1).ToArray());
+
         int failures = 0;
         failures += UnitTests();
 
@@ -201,6 +204,87 @@ static class Program
     /// "the same effect is in every video" - and the only way to see that is in
     /// aggregate, across projects, which no single render shows.
     ///   dotnet run --project src/Imagine3D.Tests -- --variety [seeds] [projectsRoot]
+    /// Prints the flow mapping: which scenes can be dissolved into which, and
+    /// which pairs want a hard cut.
+    ///
+    /// The mapping is derived, not stored - see Flow. Every effect declares what
+    /// its picture does (`motion`) and how it is organised (`focus`), and the
+    /// score for a pair falls out of those plus the coverage gap. This report is
+    /// how you read the result without running a render: pass an effect id for
+    /// its own row, or nothing for the whole library.
+    ///
+    ///   dotnet run --project src/Imagine3D.Tests -- --flow [effectId]
+    static int FlowReport(string[] args)
+    {
+        var registry = EffectRegistry.Load(FindWebRoot());
+        var scenes = registry.OfKind("scene2d", "scene3d", "raymarch")
+            .OrderBy(e => e.Id, StringComparer.Ordinal).ToList();
+
+        if (scenes.Count == 0) { Console.WriteLine("no scene effects found"); return 1; }
+
+        var only = args.FirstOrDefault();
+
+        Console.WriteLine("=== Flow mapping ===");
+        Console.WriteLine($"{scenes.Count} scene effects. Score is how well the incoming scene can be");
+        Console.WriteLine("mixed out of the outgoing one: 0.82+ flows, 0.58+ blends, under 0.42 wants a cut.\n");
+
+        // --- the classes the score is built from ---------------------------
+        Console.WriteLine("  motion x focus");
+        foreach (var g in scenes.GroupBy(e => $"{e.Motion,-9} {e.Focus,-7}").OrderBy(g => g.Key))
+            Console.WriteLine($"    {g.Key}  {g.Count(),2}  {string.Join(" ", g.Select(e => e.Id))}");
+        Console.WriteLine();
+
+        // --- per-effect rows ------------------------------------------------
+        foreach (var from in scenes)
+        {
+            if (only is not null && !from.Id.Equals(only, StringComparison.OrdinalIgnoreCase)) continue;
+
+            var scored = scenes
+                .Where(t => !t.Id.Equals(from.Id, StringComparison.OrdinalIgnoreCase))
+                .Select(t => (Id: t.Id, Score: Flow.Affinity(from, t)))
+                .OrderByDescending(x => x.Score)
+                .ToList();
+
+            Console.WriteLine($"  {from.Id}  ({from.Motion}/{from.Focus}, coverage {from.Coverage:0.00})");
+            Console.WriteLine($"    flows into   {string.Join("  ", scored.Take(6).Select(x => $"{x.Id} {x.Score:0.00}"))}");
+            Console.WriteLine($"    cut to       {string.Join("  ", scored.TakeLast(6).Reverse().Select(x => $"{x.Id} {x.Score:0.00}"))}");
+
+            if (only is not null)
+            {
+                Console.WriteLine("\n    full row, best first:");
+                foreach (var x in scored)
+                    Console.WriteLine($"      {x.Score:0.00}  {Flow.Describe(x.Score),-28}  {x.Id}");
+            }
+            Console.WriteLine();
+        }
+
+        if (only is null)
+        {
+            // How the library divides overall - the number that says whether the
+            // director has room to choose, or whether everything wants a cut.
+            int pairs = 0, flows = 0, blends = 0, shorts = 0, cuts = 0;
+            foreach (var a in scenes)
+                foreach (var b in scenes)
+                {
+                    if (ReferenceEquals(a, b)) continue;
+                    double s = Flow.Affinity(a, b);
+                    pairs++;
+                    if (s >= 0.82) flows++;
+                    else if (s >= Flow.BlendFloor) blends++;
+                    else if (s >= Flow.CutBelow) shorts++;
+                    else cuts++;
+                }
+
+            Console.WriteLine($"  {pairs} ordered pairs");
+            Console.WriteLine($"    flows (long dissolve or layer)  {flows,5}  {100.0 * flows / pairs,5:0.0}%");
+            Console.WriteLine($"    blends                          {blends,5}  {100.0 * blends / pairs,5:0.0}%");
+            Console.WriteLine($"    short dissolve                  {shorts,5}  {100.0 * shorts / pairs,5:0.0}%");
+            Console.WriteLine($"    hard cut                        {cuts,5}  {100.0 * cuts / pairs,5:0.0}%");
+        }
+
+        return 0;
+    }
+
     static int VarietyReport(string[] args)
     {
         int seeds = int.TryParse(args.ElementAtOrDefault(0), out var s) ? s : 8;

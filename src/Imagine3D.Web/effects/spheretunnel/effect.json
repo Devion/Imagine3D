@@ -4,45 +4,22 @@
   "kind": "raymarch",
   "tags": ["space", "scifi", "structure", "psychedelic", "geometric", "build", "cosmic"],
   "energyRange": [0.3, 0.95],
-  "coverage": 0.65,
+  "coverage": 0.53,
+  "motion": "depth-in",
+  "focus": "centre",
   "cost": "high",
   "description": "Concentric rings of tubes seen through a spherical inversion, so the field turns inside out at the horizon and the same geometry reads convex outside it and concave within.",
   "shader": "shader.frag",
   "params": {
-    "speed": {
-      "type": "float",
-      "default": "1.0 + 0.8*rms",
-      "min": 0.0,
-      "max": 4.0,
-      "description": "Rotation and travel rate."
-    },
-    "amplitude": {
-      "type": "float",
-      "default": "9.0",
-      "min": 2.0,
-      "max": 20.0,
-      "description": "Length of the tubes along z. Higher reads as a deeper shaft."
-    },
-    "offset": {
-      "type": "float",
-      "default": "0.5",
-      "min": -1.0,
-      "max": 1.0,
-      "description": "Where the sphere sits in frame. The source drove this from the mouse."
-    },
-    "glow": {
-      "type": "float",
-      "default": "1.0 + 0.6*beatPulse",
-      "min": 0.0,
-      "max": 3.0,
-      "description": "Brightness of the tube tips."
-    },
-    "tint": {
-      "type": "float",
-      "default": "0.6",
-      "min": 0.0,
-      "max": 1.0,
-      "description": "Blend the hue cycle toward the project palette."
-    }
+    "speed": { "type": "float", "default": "1.0 + 0.8*rms", "min": 0.0, "max": 4.0,
+              "description": "Rotation and travel rate." },
+    "amplitude": { "type": "float", "default": "9.0", "min": 2.0, "max": 20.0,
+                  "description": "Length of the tubes along z. Higher reads as a deeper shaft." },
+    "offset": { "type": "float", "default": "0.5", "min": -1.0, "max": 1.0,
+               "description": "Where the sphere sits in frame. The source drove this from the mouse." },
+    "glow": { "type": "float", "default": "1.0 + 0.6*beatPulse", "min": 0.0, "max": 3.0,
+             "description": "Brightness of the tube tips." },
+    "tint": { "type": "float", "default": "0.6", "min": 0.0, "max": 1.0,
+             "description": "Blend the hue cycle toward the project palette." }
   }
 }

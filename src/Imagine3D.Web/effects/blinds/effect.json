@@ -10,8 +10,8 @@
   "params": {
     "slats": { "type": "float", "default": "14.0", "min": 2, "max": 60 },
     "vertical": { "type": "float", "default": "0.0", "min": 0, "max": 1,
-                  "description": "0 horizontal slats, 1 vertical." },
+                 "description": "0 horizontal slats, 1 vertical." },
     "stagger": { "type": "float", "default": "0.35", "min": 0, "max": 1,
-                 "description": "How much later each successive slat opens." }
+                "description": "How much later each successive slat opens." }
   }
 }

@@ -22,8 +22,8 @@ public sealed record EffectManifest
 
     public string[] Aspects { get; init; } = ["16:9", "9:16"];
 
-    /// How much of the frame this effect lights up, 0..1. `starfield` is 0.07,
-    /// `orbs` 0.27, `fractalcanyon` 0.91.
+    /// How much of the frame this effect lights up, 0..1. `apollonian` is 0.29,
+    /// `spectrum` 0.70, `ifstunnel` 0.72.
     ///
     /// Nothing to do with energy or quality - it is area and brightness, and it
     /// exists because a cut from a frame that is full of light to one that is
@@ -31,13 +31,32 @@ public sealed record EffectManifest
     /// is. Half the picture was never there to be wiped. The director cannot see
     /// what an effect looks like, so this is where the effect says.
     ///
-    /// Seeded by measuring the contact sheet - 0.6 * the fraction of the frame
-    /// meaningfully above its own darkest tenth, plus 0.4 * mean luminance - over
-    /// two palettes. Neither half is enough alone: `water` is a full-frame ripple
-    /// with almost no local contrast, `ifsmorph` a small solid on a bright wash.
-    /// Worth re-checking if a shader changes character; a rough value is far
-    /// better than the 0.6 default, which only says "no idea".
+    /// Measured rather than guessed: render the effect off-screen with mid-energy
+    /// music values and take 0.6 * the fraction of the frame meaningfully above
+    /// its own darkest tenth, plus 0.4 * mean luminance, averaged over two
+    /// palettes and four moments. Neither half is enough alone: `water` is a
+    /// full-frame ripple with almost no local contrast, `ifsmorph` a small solid
+    /// on a bright wash.
+    ///
+    /// Re-measure whenever a shader changes character. Hand-written values drift
+    /// badly - before the last sweep the declared numbers were out by up to 0.44,
+    /// and one effect declared 0.10 while rendering black on every frame, which
+    /// is exactly the kind of thing a number nobody checks will hide.
     public double Coverage { get; init; } = 0.6;
+
+    /// What the picture does over a second: depth-in | depth-out | planar |
+    /// churn | still. See Flow, which pairs this with the outgoing scene's to
+    /// decide whether a boundary can be dissolved or wants a cut.
+    ///
+    /// Measured rather than guessed: render two frames a third of a second
+    /// apart and ask which camera move best explains the difference. An effect
+    /// that changes a great deal and travels nowhere is `churn`, and the
+    /// distinction matters - the eye tracks travel, not change.
+    public string Motion { get; init; } = "churn";
+
+    /// How the frame is organised: centre | spread | horizon. Where the eye is
+    /// when a mix starts, which is the other half of whether the mix reads.
+    public string Focus { get; init; } = "spread";
 
     /// low | medium | high - render cost, used to stay inside a frame budget.
     public string Cost { get; init; } = "low";

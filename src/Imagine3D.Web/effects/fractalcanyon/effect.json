@@ -4,8 +4,10 @@
   "kind": "raymarch",
   "tags": ["abstract", "structure", "geometric", "retro", "vast", "psychedelic", "showcase", "dream"],
   "energyRange": [0.2, 0.9],
-  "coverage": 0.91,
+  "coverage": 0.63,
   "aspects": ["16:9", "9:16"],
+  "motion": "churn",
+  "focus": "spread",
   "cost": "high",
   "rarity": 1.5,
   "description": "A flight down a folded fractal canyon with a road running through it. There is no light and no ambient occlusion — the surface is coloured by its normal and outlined by edge detection, which is what gives it an inked, cel-shaded look instead of a rendered one.",
@@ -13,12 +15,12 @@
   "params": {
     "speed": { "type": "float", "default": "0.5 + 0.5*energy", "min": 0, "max": 3 },
     "waves": { "type": "float", "default": "0.15 + 0.2*bass", "min": 0, "max": 1,
-               "description": "Roll of the canyon floor as it comes past." },
+              "description": "Roll of the canyon floor as it comes past." },
     "ink": { "type": "float", "default": "0.8 + 0.3*high", "min": 0, "max": 2,
-             "description": "Weight of the detected edges. At 0 the outlines vanish and it becomes a normal-mapped surface." },
+            "description": "Weight of the detected edges. At 0 the outlines vanish and it becomes a normal-mapped surface." },
     "fov": { "type": "float", "default": "0.9", "min": 0.4, "max": 1.6 },
     "tint": { "type": "float", "default": "0.55", "min": 0, "max": 1,
-              "description": "How far the normal colouring is pulled into the run's palette. At 0 it keeps the raw red/green/blue normal look." },
+             "description": "How far the normal colouring is pulled into the run's palette. At 0 it keeps the raw red/green/blue normal look." },
     "steps": { "type": "float", "default": "110.0", "min": 40, "max": 170 }
   }
 }

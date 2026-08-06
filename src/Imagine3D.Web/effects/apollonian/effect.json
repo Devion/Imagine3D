@@ -4,59 +4,26 @@
   "kind": "raymarch",
   "tags": ["fractal", "psychedelic", "abstract", "structure", "cosmic", "showcase", "geometric"],
   "energyRange": [0.35, 1.0],
-  "coverage": 0.30,
+  "coverage": 0.29,
+  "motion": "churn",
+  "focus": "centre",
   "cost": "high",
   "description": "Two fractal distance fields - a sine-folded lattice and an Apollonian sphere packing - lit from inside by a moving point light, with a reflection pass. The most expensive effect in the library; it earns a showcase section, not a whole video.",
   "shader": "shader.frag",
   "params": {
-    "speed": {
-      "type": "float",
-      "default": "1.0 + 0.5*rms",
-      "min": 0.0,
-      "max": 3.0,
-      "description": "Master rate. Both the orbit and the fold below are fractions of it, so this is the one knob that changes how busy the whole thing is."
-    },
-    "orbit": {
-      "type": "float",
-      "default": "0.11",
-      "min": 0.0,
-      "max": 0.6,
-      "description": "Camera orbit, in radians per second at speed 1. The packing is dense enough that a tenth of a radian sweeps a whole generation of spheres past the frame, so this wants to stay low - 0.11 takes about a minute to come round, which is a slow drift over a scene rather than a ride. Above ~0.3 it reads as flying through the fractal at speed."
-    },
-    "churn": {
-      "type": "float",
-      "default": "0.18",
-      "min": 0.0,
-      "max": 1.0,
-      "description": "How fast the packing folds through itself, as a fraction of speed. The angle is re-applied to space that has already been inverted five times, so small values go a long way - past ~0.4 the structure strobes instead of moving. 0 leaves a still fractal that the camera orbits."
-    },
-    "steps": {
-      "type": "float",
-      "default": "100.0",
-      "min": 30.0,
-      "max": 140.0,
-      "description": "Primary march steps. The main cost lever - drop this first if the render rate suffers."
-    },
-    "glow": {
-      "type": "float",
-      "default": "1.0 + 0.7*bass",
-      "min": 0.0,
-      "max": 3.0,
-      "description": "Intensity of the point light buried in the structure."
-    },
-    "reflect": {
-      "type": "float",
-      "default": "1.0",
-      "min": 0.0,
-      "max": 2.0,
-      "description": "Contribution of the reflection march. At 0 the surfaces go flat."
-    },
-    "tint": {
-      "type": "float",
-      "default": "0.65",
-      "min": 0.0,
-      "max": 1.0,
-      "description": "Blend the light colour toward the project palette."
-    }
+    "speed": { "type": "float", "default": "1.0 + 0.5*rms", "min": 0.0, "max": 3.0,
+              "description": "Master rate. Both the orbit and the fold below are fractions of it, so this is the one knob that changes how busy the whole thing is." },
+    "orbit": { "type": "float", "default": "0.11", "min": 0.0, "max": 0.6,
+              "description": "Camera orbit, in radians per second at speed 1. The packing is dense enough that a tenth of a radian sweeps a whole generation of spheres past the frame, so this wants to stay low - 0.11 takes about a minute to come round, which is a slow drift over a scene rather than a ride. Above ~0.3 it reads as flying through the fractal at speed." },
+    "churn": { "type": "float", "default": "0.18", "min": 0.0, "max": 1.0,
+              "description": "How fast the packing folds through itself, as a fraction of speed. The angle is re-applied to space that has already been inverted five times, so small values go a long way - past ~0.4 the structure strobes instead of moving. 0 leaves a still fractal that the camera orbits." },
+    "steps": { "type": "float", "default": "100.0", "min": 30.0, "max": 140.0,
+              "description": "Primary march steps. The main cost lever - drop this first if the render rate suffers." },
+    "glow": { "type": "float", "default": "1.0 + 0.7*bass", "min": 0.0, "max": 3.0,
+             "description": "Intensity of the point light buried in the structure." },
+    "reflect": { "type": "float", "default": "1.0", "min": 0.0, "max": 2.0,
+                "description": "Contribution of the reflection march. At 0 the surfaces go flat." },
+    "tint": { "type": "float", "default": "0.65", "min": 0.0, "max": 1.0,
+             "description": "Blend the light colour toward the project palette." }
   }
 }

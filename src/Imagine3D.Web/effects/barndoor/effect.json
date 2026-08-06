@@ -10,6 +10,6 @@
   "params": {
     "vertical": { "type": "float", "default": "0.0", "min": 0, "max": 1 },
     "slide": { "type": "float", "default": "1.0", "min": 0, "max": 1,
-               "description": "1 slides the halves away, 0 wipes them in place." }
+              "description": "1 slides the halves away, 0 wipes them in place." }
   }
 }

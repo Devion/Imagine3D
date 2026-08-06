@@ -206,6 +206,9 @@ void main() {
   col += palClamp(0.35) * exp(-length(uv * vec2(0.7, 1.1)) * 1.6) * 0.10 * (0.5 + uRms);
 
   col *= 0.92 + 0.18 * uBeatPulse;
-  col *= 1.0 - 0.34 * pow(clamp(length(uv * vec2(0.5, 0.8)), 0.0, 1.0), 2.3);
+  // Light. The canyon already falls away into its own haze with depth, and a
+  // strong vignette on top of that darkens the near cones at the edges of the
+  // frame - which are the loudest thing in the shot.
+  col *= 1.0 - 0.16 * pow(clamp(length(uv * vec2(0.4, 0.65)), 0.0, 1.0), 2.6);
   fragColor = vec4(max(col, 0.0), 1.0);
 }

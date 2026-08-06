@@ -4,8 +4,10 @@
   "kind": "scene2d",
   "tags": ["space", "cosmic", "vast", "dream", "psychedelic", "calm", "glow", "abstract"],
   "energyRange": [0.0, 0.75],
-  "coverage": 0.70,
+  "coverage": 0.54,
   "aspects": ["16:9", "9:16"],
+  "motion": "churn",
+  "focus": "spread",
   "cost": "medium",
   "description": "A nebula built from an inversion fractal sampled as a scalar field: the sum of how sharply the orbit's magnitude changes at each fold, which piles up into filaments and voids. Two layers at different depths drift past each other, with stars behind. The original was written against an FFT texture, so it drives directly off the real spectrum here.",
   "shader": "shader.frag",
@@ -13,8 +15,8 @@
     "zoom": { "type": "float", "default": "1.0", "min": 0.3, "max": 3 },
     "bright": { "type": "float", "default": "0.9 + 0.5*rms", "min": 0, "max": 3 },
     "detail": { "type": "float", "default": "26.0", "min": 8, "max": 26,
-                "description": "Folds in the near layer. The far layer always takes fewer." },
-    "drift": { "type": "float", "default": "0.6 + 0.5*energy", "min": 0, "max": 3 },
+               "description": "Folds in the near layer. The far layer always takes fewer." },
+    "drift": { "type": "float", "default": "1.4 + 1.2*energy", "min": 0, "max": 3 },
     "stars": { "type": "float", "default": "1.0", "min": 0, "max": 3 }
   }
 }

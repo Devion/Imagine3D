@@ -157,9 +157,73 @@ The director holds blending back where the music genuinely breaks (a big energy
 jump or a strong section boundary earns a hard cut) and uses it elsewhere;
 roughly a quarter to a third of scene changes end up blended.
 
+A blend *replaces* the transition rather than decorating one, so it has to carry
+the crossfade itself. `sceneblend` takes a `reveal` alongside its mix amount:
+reveal decides which of the two scenes the frame settles on underneath the layer,
+and it starts at zero. At the boundary both knobs are zero, so the first frame of
+a blended scene is precisely the last frame of the one before it and the new
+scene arrives by being mixed in. Without that the mix amount alone left the
+incoming scene on screen raw at the cut and then swelled the outgoing one back
+over the top of it — a hard cut followed by a ghost, which is the opposite of
+flowing. Scene 0 is transitioned out of black for the same reason: it is
+otherwise the one edit in the render that nothing leads into.
+
 Transitions carry a repetition penalty, the same as scenes. Without it the
 best-matching transition wins every comparable boundary — one shader ended up
 carrying nine of twenty edits and the video read as repetitive.
+
+### Which effects flow into which
+
+Whether a boundary can be dissolved is a question about *two* pictures, and
+`coverage` only answers "will the lights go out". Two effects can be identically
+bright and still cut badly: a flat plasma into a corridor flight shares nothing
+but its exposure, and dissolving between them shows two unrelated pictures at
+once rather than one becoming the other. Two tunnel flights, meanwhile, dissolve
+into each other almost invisibly however different their geometry is, because the
+eye tracks the same vanishing point through both.
+
+A pairwise table would be the obvious answer and is the wrong one — 58 scene
+effects is 1653 pairs, and adding an effect would mean writing 58 new entries. So
+each effect declares two properties of its picture and the pair score is derived:
+
+| field | values | what it decides |
+|---|---|---|
+| `motion` | `depth-in` `depth-out` `planar` `churn` `still` | whether the two share an optical flow for a dissolve to ride on |
+| `focus` | `centre` `spread` `horizon` | whether they agree about where the eye is when the mix starts |
+
+`Flow.Affinity` combines those with the coverage gap into 0..1, and the director
+uses it three ways: it biases *which* effect gets picked (gently, and not at all
+where the music wants a break), it refuses to layer pairs that would come out as
+mush, and it scales how long a transition runs. Opposed travel — a flight into
+the screen against one falling away — scores zero on motion, and that is exactly
+when a hard cut is the honest edit: the eye cannot track both flows, so a slow mix
+reads as a fault rather than as a transition.
+
+Across the current library that comes out as 24% of ordered pairs flowing, 34%
+blendable, 30% wanting a short dissolve and 12% wanting a hard cut. Read the
+mapping for yourself — the whole library, or one effect's full row:
+
+```
+dotnet run --project src/Imagine3D.Tests -- --flow            # every effect
+dotnet run --project src/Imagine3D.Tests -- --flow spectrum   # one row in full
+```
+
+Each scene in a storyboard also records the verdict for its own boundary in its
+`why`, so the plan says why an edit is a cut rather than a dissolve.
+
+### Measuring what an effect declares
+
+`coverage` and `motion` are the two fields nobody can eyeball reliably, and both
+are load-bearing. **`probe.html`**, served alongside `preview.html`, measures
+them: it renders each effect off-screen and reports coverage, plus which camera
+move best explains two frames a third of a second apart. `?auto=1` runs it on
+load so it can be driven headlessly.
+
+Coverage is authoritative — a disagreement over about 0.10 means the manifest is
+wrong. Motion is a screen rather than a verdict: the fit only sees head-on
+travel, so an off-axis corridor flight or a sparse point field comes back as
+`churn` however plainly it is a flight. The flag worth always acting on is
+`BARELY MOVES`, which is a picture that changes too little to hold a scene.
 
 ### Why the render loop is built this way
 
@@ -213,18 +277,26 @@ effects/plasma/
 {
   "id": "plasma", "name": "Plasma", "kind": "scene2d",
   "tags": ["amiga", "retro", "psychedelic"],
-  "energyRange": [0.1, 0.7], "coverage": 0.48, "cost": "low",
+  "energyRange": [0.1, 0.7], "coverage": 0.62, "cost": "low",
+  "motion": "churn", "focus": "spread",
   "params": { "scale": { "type": "float", "default": "2.4 + 0.8*beatPulse" } }
 }
 ```
 
-`coverage` is how much of the frame the effect lights up, 0..1 — `starfield` is
-0.07, `orbs` 0.27, `fractalcanyon` 0.91. It has nothing to do with energy or
+`coverage` is how much of the frame the effect lights up, 0..1 — `apollonian` is
+0.29, `spectrum` 0.70, `ifstunnel` 0.72. It has nothing to do with energy or
 quality. It exists because cutting from a frame full of light to one that is
 mostly black reads as the lights going out however good the transition is, and
 the director cannot see what an effect looks like unless the effect says. Get it
 roughly right and the edit around your effect gets longer, softer and more
 likely to layer rather than wipe.
+
+Measure it rather than guessing: render the effect off-screen with mid-energy
+music values and take 0.6 × the fraction of the frame meaningfully above its own
+darkest tenth, plus 0.4 × mean luminance, averaged over a couple of palettes and
+a few moments. Hand-written values drift — before the last sweep the declared
+numbers were out by up to 0.44, and one effect declared 0.10 while rendering
+black on every frame, which is exactly what a number nobody checks will hide.
 
 Parameters are **expressions over the music**, so an effect becomes beat-reactive
 without containing any sync code:

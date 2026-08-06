@@ -4,45 +4,22 @@
   "kind": "scene2d",
   "tags": ["abstract", "structure", "geometric", "cosmic", "dream", "glow", "psychedelic"],
   "energyRange": [0.15, 0.85],
-  "coverage": 0.15,
+  "coverage": 0.62,
+  "motion": "depth-in",
+  "focus": "spread",
   "cost": "medium",
-  "description": "Drifting nodes wired to their neighbours, in four layers flying toward the camera. The node sparkle rides the low end, so the network fires on the beat rather than on a timer.",
+  "description": "Drifting nodes wired to their neighbours, in five layers flying toward the camera through a lit haze. The node sparkle rides the low end, so the network fires on the beat rather than on a timer.",
   "shader": "shader.frag",
   "params": {
-    "speed": {
-      "type": "float",
-      "default": "0.1 + 0.05*rms",
-      "min": 0.01,
-      "max": 0.6,
-      "description": "How fast the layers fly past and the nodes wander."
-    },
-    "layers": {
-      "type": "float",
-      "default": "4.0",
-      "min": 1.0,
-      "max": 6.0,
-      "description": "Depth layers. More means a denser, busier field."
-    },
-    "glow": {
-      "type": "float",
-      "default": "2.0 + 1.5*bass",
-      "min": 0.0,
-      "max": 6.0,
-      "description": "Vertical wash behind the network. This is the band-driven term - it swells with the low end."
-    },
-    "sparkle": {
-      "type": "float",
-      "default": "1.0 + 0.8*beatPulse",
-      "min": 0.0,
-      "max": 3.0,
-      "description": "How hard the nodes flare."
-    },
-    "drift": {
-      "type": "float",
-      "default": "0.35",
-      "min": 0.0,
-      "max": 1.5,
-      "description": "Parallax between layers. The source drove this from the mouse; here it is a slow orbit."
-    }
+    "speed": { "type": "float", "default": "0.1 + 0.05*rms", "min": 0.01, "max": 0.6,
+              "description": "How fast the layers fly past and the nodes wander." },
+    "layers": { "type": "float", "default": "5.0", "min": 1.0, "max": 6.0,
+               "description": "Depth layers. More means a denser, busier field." },
+    "glow": { "type": "float", "default": "2.0 + 1.5*bass", "min": 0.0, "max": 6.0,
+             "description": "Vertical wash behind the network. This is the band-driven term - it swells with the low end." },
+    "sparkle": { "type": "float", "default": "1.0 + 0.8*beatPulse", "min": 0.0, "max": 3.0,
+                "description": "How hard the nodes flare." },
+    "drift": { "type": "float", "default": "0.35", "min": 0.0, "max": 1.5,
+              "description": "Parallax between layers. The source drove this from the mouse; here it is a slow orbit." }
   }
 }

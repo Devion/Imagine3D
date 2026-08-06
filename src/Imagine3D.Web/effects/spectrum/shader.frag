@@ -2,123 +2,184 @@
 #include "noise.glsl"
 #include "palette.glsl"
 #include "panel.glsl"
+#include "sdf.glsl"
 
-// A hi-fi LED spectrum analyser: a ladder of segments per bar, a cap holding
-// each bar's peak before sliding down, and the whole thing reflected in the
-// gloss it stands on.
+// The analyser, stood up and walked into.
 //
-// The analysis carries six band followers, not a full spectrum, so the bars are
-// read off a curve through those six points rather than off 28 independent
-// filters. That is what the analyser actually knows: the shape across the frame
-// is real, the resolution behind it is six. What stops it looking like a drawn
-// curve is `detail` — a per-bar deviation scaled by that bar's own level and by
-// onset, so the ladder scatters while the music is busy and settles when it is
-// not, instead of jittering over a quiet passage.
+// The flat version was a good instrument and a poor scene: a ladder of LEDs on a
+// baseline across the bottom third of the frame, a gloss under it, and nothing
+// anywhere else. It read as a widget sitting on the video rather than as the
+// video, which behind a band is exactly the wrong way round.
 //
-// Everything here is *added* to the card. LEDs are emitters on black; there is
-// nothing for them to occlude, and treating them that way is what makes the
-// reflection one more add rather than a second compositing path.
+// Same instrument, marched. The bars are boxes on a floor that runs to the
+// horizon, repeated forever in both axes by domain repetition, so one distance
+// evaluation covers a field of thousands. The camera flies down it at bar
+// height: the nearest columns are taller than the frame, the far ones converge
+// on a vanishing point, and the floor underneath reflects the lot.
+//
+// About the depth axis. A real 3D analyser puts *time* into it - each row behind
+// the front one is the spectrum a moment ago. This analysis has no history to
+// draw on: the six band followers are uniforms at the current instant and
+// nothing stores what they were. Rather than invent a past, the rows carry the
+// present reading with a travelling phase, so the field ripples away from the
+// camera as a wave. It is the same measurement everywhere, which is the honest
+// thing to show, and it moves the way a history would.
 
-const float BASE = -0.44;   // the baseline the bars stand on
-const float TOP  =  0.86;   // the top of a full-scale bar
+const float PITCH = 0.62;    // spacing between bars, both axes
+const float FAR = 46.0;
 
-vec3 gCap;
+float gBars, gWidth, gHeight, gTime, gWave;
 
-/// Green up to about two thirds, amber, then red — blended toward the palette so
-/// the analyser belongs to the video's colour world instead of fighting it.
-vec3 ledColour(float v) {
-  vec3 c = mix(vec3(0.12, 0.95, 0.34), vec3(1.00, 0.74, 0.10), smoothstep(0.52, 0.74, v));
-  c = mix(c, vec3(1.00, 0.17, 0.12), smoothstep(0.79, 0.92, v));
-  return mix(c, palClamp(0.10 + 0.85 * v), p_tint);
+/// Frequency coordinate for the bar in column `ci`. Mirrored about the centre
+/// line so the sub band runs down the middle of the canyon and air sits out at
+/// the walls - the same convention the ring version uses, and the reason the
+/// field breathes along one axis and glitters along the other.
+float freqOf(float ci) {
+  float u = fract((ci + 0.5) / gBars);
+  return abs(1.0 - 2.0 * u);
 }
 
-/// Light emitted by the ladder at p. Nothing is occluded, so this is the whole
-/// of the analyser and it can be sampled twice — once upright, once mirrored.
-vec3 ladderLight(vec2 p, float aa) {
-  float halfW = uAspect * 0.94;
-  float bars = clamp(floor(p_bars + 0.5), 4.0, 64.0);
-  float segs = clamp(floor(p_segments + 0.5), 4.0, 40.0);
+/// Level and peak for the bar in cell (ci, cz).
+void barLevels(float ci, float cz, out float lvl, out float pk) {
+  float x = freqOf(ci);
+  // The travelling phase. Rows further away are further round the wave, so the
+  // field reads as motion away from the camera rather than as one solid ridge.
+  float wave = 0.5 + 0.5 * sin(cz * PITCH * 0.7 - gTime * gWave);
+  float shape = 0.30 + 0.95 * wave;
 
-  float bx = (p.x + halfW) / (2.0 * halfW) * bars;
-  if (bx < -0.6 || bx > bars + 0.6) return vec3(0.0);
+  // Per-bar deviation, so neighbouring columns are not identical samples of one
+  // six-point curve.
+  float n = valueNoise(vec2(ci * 1.9, cz * 0.7 + gTime * 0.8)) - 0.5;
+  shape *= max(0.0, 1.0 + p_detail * n * (1.0 + 1.2 * uOnset));
 
-  float bar = clamp(floor(bx), 0.0, bars - 1.0);
-  float pitch = 2.0 * halfW / bars;
-  float cx = (bar + 0.5) * pitch - halfW;
-  float x = (bar + 0.5) / bars;
+  lvl = clamp(spectrumNow(x) * shape, 0.0, 1.4);
+  pk = clamp(spectrumPeak(x) * shape, 0.0, 1.4);
+}
 
-  // The same shaping is applied to the level and to the cap, so the cap can
-  // never end up drawn below the bar it belongs to.
-  float n = valueNoise(vec2(bar * 1.7, uTime * 2.2)) - 0.5;
-  float shape = max(0.0, 1.0 + p_detail * n * (1.1 + 1.5 * uOnset)) * mix(1.06, 0.86, x);
+float map(vec3 p) {
+  vec2 cell = floor(p.xz / PITCH + 0.5);
+  vec2 q = p.xz - cell * PITCH;
 
-  float level = clamp(spectrumNow(x) * shape, 0.0, 1.0);
-  float cap = clamp(spectrumPeak(x) * shape, 0.0, 1.0);
+  float lvl, pk;
+  barLevels(cell.x, cell.y, lvl, pk);
 
-  float segH = (TOP - BASE) / segs;
-  float sy = (p.y - BASE) / segH;
-  float seg = floor(sy);
+  float h = max(0.03, lvl * gHeight);
+  float bar = sdBox(vec3(q.x, p.y - h * 0.5, q.y), vec3(gWidth, h * 0.5, gWidth));
 
-  vec3 emit = vec3(0.0);
+  // The cap that holds the peak and slides down - the one part of a hi-fi meter
+  // that says something the bar itself does not.
+  float capY = max(0.06, pk * gHeight) + 0.07;
+  float cap = sdBox(vec3(q.x, p.y - capY, q.y), vec3(gWidth * 1.2, 0.022, gWidth * 1.2));
 
-  // --- the segment this pixel is in ---------------------------------------
-  // `on` fades the topmost lit segment in rather than snapping it, which is what
-  // gives the ladder its half-lit leading edge.
-  float on = clamp(level * segs - seg, 0.0, 1.0);
-  float inCol = step(0.0, seg) * step(seg, segs - 1.0);
-  float segD = sdRoundBox2(vec2(p.x - cx, (fract(sy) - 0.5) * segH),
-                           vec2(pitch * 0.34, segH * 0.30), segH * 0.12);
-  emit += ledColour((seg + 0.5) / segs) * fill(segD, aa) * inCol * (0.05 + 1.25 * on);
+  // Only the cell the point falls in is measured, which is the usual bound for a
+  // repeated field and is an over-estimate here: a taller bar one cell over can
+  // be nearer than the one directly below. Shortening every step by a third is
+  // the cheap fix - a correct bound would mean evaluating four neighbours, and
+  // this field is cheap to evaluate but not that cheap.
+  return min(p.y, min(bar, cap)) * 0.66;
+}
 
-  // --- glow off the lit part of the column --------------------------------
-  // One halo for the whole lit stack rather than one per segment: this pixel can
-  // only see its own cell, so per-segment bloom would stop at every cell edge.
-  float litH = level * (TOP - BASE);
-  float r = min(pitch * 0.2, max(litH * 0.5, 0.0));
-  float glowD = sdRoundBox2(vec2(p.x - cx, p.y - (BASE + litH * 0.5)),
-                            vec2(pitch * 0.34, litH * 0.5), r);
-  emit += ledColour(level) * exp(-max(0.0, glowD) / 0.05)
-          * 0.30 * p_glow * smoothstep(0.02, 0.12, level);
+/// Colour of whatever the ray landed on at p. `eps` is how close to the floor
+/// still counts as the floor, which has to grow with distance because so does
+/// the marcher's hit tolerance.
+vec3 shadeHit(vec3 p, vec3 n, vec3 rd, float eps) {
+  vec2 cell = floor(p.xz / PITCH + 0.5);
+  float lvl, pk;
+  barLevels(cell.x, cell.y, lvl, pk);
 
-  // --- peak cap -----------------------------------------------------------
-  float capSeg = floor(cap * segs);
-  float capD = sdRoundBox2(vec2(p.x - cx, (sy - capSeg - 0.5) * segH),
-                           vec2(pitch * 0.34, segH * 0.13), segH * 0.08);
-  emit += gCap * fill(capD, aa) * 1.7
-          * step(0.0, capSeg) * step(capSeg, segs - 1.0) * smoothstep(0.02, 0.10, cap);
+  if (p.y < eps) {
+    // Floor: dark, ruled, and mostly there to carry the reflection.
+    vec2 g = abs(fract(p.xz / PITCH + 0.5) - 0.5);
+    float line = smoothstep(0.055, 0.0, min(g.x, g.y));
+    return palClamp(0.03) * 0.7 + palClamp(0.55) * line * 0.20;
+  }
 
-  return emit;
+  float h = max(0.03, lvl * gHeight);
+  float up = sat(p.y / max(h, 1e-3));
+
+  // The ladder's own meaning: green at the bottom, amber, red at the top. Kept
+  // as an option because it is what a meter means, not a decoration of it.
+  vec3 native = up < 0.62 ? mix(vec3(0.10, 0.95, 0.30), vec3(0.35, 1.0, 0.20), up / 0.62)
+              : up < 0.85 ? mix(vec3(0.95, 0.78, 0.10), vec3(1.0, 0.55, 0.05), (up - 0.62) / 0.23)
+              : vec3(1.0, 0.16, 0.10);
+  vec3 c = mix(native, palClamp(0.12 + 0.80 * up), p_tint);
+
+  // Segment gaps, so a column is a stack of LEDs rather than a painted bar.
+  float seg = fract(p.y * clamp(p_segments, 4.0, 40.0) / max(gHeight, 1e-3));
+  c *= 0.45 + 0.75 * smoothstep(0.0, 0.16, seg) * smoothstep(1.0, 0.84, seg);
+
+  // Cap slab reads white-hot.
+  if (p.y > max(0.06, pk * gHeight) + 0.03) c = mix(vec3(1.0), palClamp(0.99), 0.5) * 1.6;
+
+  // Emissive, but not flat: the faces facing the camera run brighter, which is
+  // what keeps a box from reading as a sticker.
+  c *= 0.62 + 0.55 * abs(dot(n, -rd));
+  return c * (0.75 + 0.85 * lvl);
 }
 
 void main() {
-  vec2 p = centered(vUv, uAspect);
-  float aa = pixel();
+  gBars = clamp(floor(p_bars + 0.5), 4.0, 64.0);
+  gWidth = PITCH * 0.5 * clamp(p_thickness, 0.15, 0.95);
+  gHeight = p_height;
+  gTime = uTime;
+  gWave = p_wave;
 
-  gCap = mix(vec3(1.00, 0.97, 0.90), palClamp(0.99), p_tint * 0.7);
+  vec2 uv = centered(vUv, uAspect);
 
-  // Card: near-black, with a slow palette wash behind the baseline so the panel
-  // is a dark surface rather than a void.
-  vec3 col = mix(vec3(0.030, 0.032, 0.040), vec3(0.008, 0.008, 0.012), sat(-p.y * 0.5 + 0.5));
-  col += palClamp(0.20) * 0.04 * exp(-abs(p.y - BASE) * 1.5);
+  // Down among the bars, not above them. A camera looking down on the field
+  // turns it back into a chart; a camera at bar height is inside a city.
+  float travel = uTime * p_speed;
+  vec3 ro = vec3(sin(uTime * 0.13) * 1.2, 0.55 + p_height * 0.42 + sin(uTime * 0.2) * 0.12, -travel);
+  vec3 ta = ro + vec3(sin(uTime * 0.09) * 0.35, -0.18 + sin(uTime * 0.17) * 0.06, 1.0);
+  mat3 cam = lookAt(ro, ta, sin(uTime * 0.07) * 0.06 + uBarPulse * 0.02);
+  vec3 rd = normalize(cam * vec3(uv, 1.5 + 0.10 * uBeatPulse));
 
-  col += ladderLight(p, aa);
+  // ---- sky ----------------------------------------------------------------
+  // Night, not daylight. The bars are emitters and the whole read depends on
+  // them being the brightest thing in the shot; a sky anywhere near their level
+  // turns a lit canyon into an aerial photograph of an industrial estate.
+  vec3 sky = mix(palClamp(0.26), palClamp(0.01), sat(rd.y * 1.8 + 0.15)) * 0.28;
+  sky += palClamp(0.70) * exp(-abs(rd.y) * 5.0) * 0.16;              // horizon band
+  sky += palClamp(0.85) * pow(max(0.0, rd.y), 6.0) * 0.06;
+  vec3 col = sky;
 
-  // Gloss. The same emitters mirrored about the baseline and dimmed, which is
-  // all a reflection is once everything above it emits.
-  float below = BASE - p.y;
-  if (below > 0.0) {
-    // A hair of horizontal wander, so it reads as polished rather than as a
-    // second copy of the picture.
-    float wob = sin(p.y * 85.0 + uTime * 1.4) * 0.004;
-    col += ladderLight(vec2(p.x + wob, BASE + below), aa) * p_reflect * exp(-below * 3.4);
+  int steps;
+  float t = raymarch(ro, rd, FAR, 96, steps);
+
+  if (t < FAR) {
+    vec3 p = ro + rd * t;
+    vec3 n = calcNormal(p, 0.004);
+    float eps = max(0.02, 0.006 * t);
+    vec3 c = shadeHit(p, n, rd, eps);
+
+    // Floor reflection. A second, short march is what makes a lit field over a
+    // polished plane read as a room rather than as two unrelated pictures.
+    if (p.y < eps) {
+      vec3 r = reflect(rd, vec3(0.0, 1.0, 0.0));
+      float rt = 0.05;
+      for (int i = 0; i < 40; i++) {
+        float d = map(p + r * rt);
+        if (d < 0.004 || rt > 14.0) break;
+        rt += d * 0.9;
+      }
+      vec3 refl = sky;
+      if (rt <= 14.0) {
+        vec3 rp = p + r * rt;
+        refl = shadeHit(rp, calcNormal(rp, 0.006), r, 0.02) * exp(-rt * 0.10);
+      }
+      // Grazing angles see the reflection, steep ones see the surface.
+      c += refl * p_reflect * pow(1.0 - abs(rd.y), 2.0) * 1.2;
+    }
+
+    c *= 0.30 + 0.70 * ambientOcclusion(p, n);
+    col = mix(c, sky, smoothstep(FAR * 0.25, FAR * 0.9, t));
   }
 
-  // The baseline the bars stand on.
-  float bl = abs(p.y - BASE);
-  col += mix(vec3(0.55), palClamp(0.75), p_tint)
-         * (fill(bl - 0.0035, aa) * 0.45 + exp(-bl * 40.0) * 0.22);
+  // Glow gathered from rays that nearly grazed something - the haze a field of
+  // emitters throws into the air around it.
+  col += palClamp(0.85) * pow(1.0 - float(steps) / 96.0, 5.0) * 0.16 * p_glow;
 
-  col *= 1.0 - 0.34 * pow(length(p * vec2(0.45, 0.75)), 2.6);
-  col *= 0.95 + 0.12 * uBeatPulse;
+  col *= 0.94 + 0.20 * uBeatPulse;
+  col = col / (1.0 + col * 0.30);
   fragColor = vec4(max(col, 0.0), 1.0);
 }

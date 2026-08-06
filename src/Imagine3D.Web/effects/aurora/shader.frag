@@ -28,7 +28,11 @@ void main() {
   vec2 uv = centered(vUv, uAspect);
   float t = uTime * p_speed;
 
-  vec3 ro = vec3(0.0, 0.0, 0.0);
+  // Travelling under the curtains rather than standing beneath them. The
+  // curtain field is sampled at pos.xz, so moving the origin sweeps the whole
+  // sky past overhead - which is what an aurora looks like from a moving car
+  // and, measured, the difference between this and a still frame.
+  vec3 ro = vec3(sin(uTime * 0.07) * 2.0, 0.0, uTime * p_drift);
   vec3 rd = normalize(vec3(uv, 1.3));
 
   vec3 col = vec3(0.0);

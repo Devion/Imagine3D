@@ -4,45 +4,22 @@
   "kind": "raymarch",
   "tags": ["organic", "glow", "psychedelic", "cinematic", "water", "dream", "structure"],
   "energyRange": [0.2, 0.85],
-  "coverage": 0.78,
+  "coverage": 0.58,
+  "motion": "depth-in",
+  "focus": "centre",
   "cost": "high",
   "description": "A twisting gyroid cave with a mirrored waterline and a pulsing wisp of light running ahead of the camera. Mirroring the field about the horizon is what makes the reflection - there is no second pass.",
   "shader": "shader.frag",
   "params": {
-    "speed": {
-      "type": "float",
-      "default": "1.0 + 0.6*rms",
-      "min": 0.0,
-      "max": 4.0,
-      "description": "How fast the cave travels past."
-    },
-    "twist": {
-      "type": "float",
-      "default": "2.0",
-      "min": 0.0,
-      "max": 6.0,
-      "description": "How hard the cave walls corkscrew with depth."
-    },
-    "detail": {
-      "type": "float",
-      "default": "24.0",
-      "min": 8.0,
-      "max": 48.0,
-      "description": "Frequency of the second gyroid. The difference between the two scales is the cave surface, so this controls how crusted the walls look."
-    },
-    "wisp": {
-      "type": "float",
-      "default": "1.4 + 0.8*beatPulse",
-      "min": 0.0,
-      "max": 4.0,
-      "description": "Brightness of the light running down the tunnel centre."
-    },
-    "tint": {
-      "type": "float",
-      "default": "0.6",
-      "min": 0.0,
-      "max": 1.0,
-      "description": "Blend the wisp and walls toward the project palette."
-    }
+    "speed": { "type": "float", "default": "1.0 + 0.6*rms", "min": 0.0, "max": 4.0,
+              "description": "How fast the cave travels past." },
+    "twist": { "type": "float", "default": "2.0", "min": 0.0, "max": 6.0,
+              "description": "How hard the cave walls corkscrew with depth." },
+    "detail": { "type": "float", "default": "24.0", "min": 8.0, "max": 48.0,
+               "description": "Frequency of the second gyroid. The difference between the two scales is the cave surface, so this controls how crusted the walls look." },
+    "wisp": { "type": "float", "default": "1.4 + 0.8*beatPulse", "min": 0.0, "max": 4.0,
+             "description": "Brightness of the light running down the tunnel centre." },
+    "tint": { "type": "float", "default": "0.6", "min": 0.0, "max": 1.0,
+             "description": "Blend the wisp and walls toward the project palette." }
   }
 }

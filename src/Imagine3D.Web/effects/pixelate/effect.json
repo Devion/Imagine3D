@@ -11,6 +11,6 @@
   "shader": "shader.frag",
   "params": {
     "size": { "type": "float", "default": "160.0 - 90.0*beatPulse", "min": 16, "max": 640,
-              "description": "Horizontal pixel count. Lower is chunkier." }
+             "description": "Horizontal pixel count. Lower is chunkier." }
   }
 }

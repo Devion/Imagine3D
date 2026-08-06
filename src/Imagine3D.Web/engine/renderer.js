@@ -300,16 +300,34 @@ export class Renderer {
     // cut. The underlying scene keeps being drawn for `duration` seconds (0 =
     // the whole scene), and the mix ramps in and out over `fade` so it never
     // pops in or snaps off.
+    //
+    // The blend *is* the boundary - the director sets transitionDuration to 0
+    // whenever it picks one - so this pass has to carry the crossfade as well as
+    // the layer. `reveal` does that: it decides which scene the frame settles on
+    // underneath the layer, and it starts at 0. At intoScene = 0 the layer is
+    // also 0, so the first frame of a blended scene is precisely the last frame
+    // of the one before it, and the new scene arrives by being mixed in.
+    //
+    // Without it the envelope alone left the frame showing the incoming scene
+    // raw at the cut and then swelled the outgoing one back over the top of it -
+    // a hard cut followed by a ghost, which is the opposite of flowing.
     const blend = scene.blend;
     let blended = false;
     if (prevScene && blend) {
       const span = blend.duration > 0 ? blend.duration : scene.end - scene.start;
       if (intoScene < span) {
-        const fade = Math.max(0.001, blend.fade ?? 0.5);
+        // A ramp longer than half the span could never finish, so the reveal
+        // would still be mid-crossfade when the layer was already leaving.
+        const fade = Math.min(Math.max(0.001, blend.fade ?? 0.5), span * 0.45);
+        const k = Math.min(1, intoScene / fade);
+        const reveal = k * k * (3 - 2 * k);
         const envelope = Math.min(1,
           Math.min(intoScene / fade, (span - intoScene) / fade));
 
-        if (envelope > 0.002) {
+        // Run it whenever either knob is doing something. Skipping on a zero
+        // envelope alone would skip exactly the frames where the reveal is
+        // holding the outgoing scene on screen.
+        if (envelope > 0.002 || reveal < 0.998) {
           this.renderSceneWithPost(prevScene, t, this.sceneB);
 
           const amountFn = this.compiled.get(`b${scene.index}`)?.__amount;
@@ -319,7 +337,7 @@ export class Renderer {
           bState.amount = Math.max(0, Math.min(1, raw)) * envelope;
           bState.blendMode = Math.max(0, BLEND_MODES.indexOf(blend.mode ?? 'screen'));
 
-          this.drawEffect('sceneblend', this.post.write, bState, {},
+          this.drawEffect('sceneblend', this.post.write, bState, { reveal },
             this.textures({ prev: this.sceneB.texture, next: this.sceneA.texture }));
           this.post.swap();
           current = this.post.read;
@@ -330,14 +348,22 @@ export class Renderer {
 
     // --- 2b. transition from the outgoing scene -----------------------------
     // Skipped while a blend is doing the work, or the two would fight.
-    if (!blended && prevScene && scene.transitionIn && scene.transitionDuration > 0 &&
+    if (!blended && scene.transitionIn && scene.transitionDuration > 0 &&
         intoScene < scene.transitionDuration) {
-      this.renderSceneWithPost(prevScene, t, this.sceneB);
+      // The first scene has nothing to come from, so it is transitioned out of
+      // black rather than being skipped: otherwise the video opens on a frame
+      // already at full brightness, which is the one cut in the whole render
+      // that nothing at all leads into.
+      let outgoing = this.blank;
+      if (prevScene) {
+        this.renderSceneWithPost(prevScene, t, this.sceneB);
+        outgoing = this.sceneB.texture;
+      }
 
       const k = Math.min(1, intoScene / scene.transitionDuration);
       const tState = { ...state, amount: k };
       this.drawEffect(scene.transitionIn, this.post.write, tState, {},
-        this.textures({ prev: this.sceneB.texture, next: this.sceneA.texture }));
+        this.textures({ prev: outgoing, next: this.sceneA.texture }));
       this.post.swap();
       current = this.post.read;
     }

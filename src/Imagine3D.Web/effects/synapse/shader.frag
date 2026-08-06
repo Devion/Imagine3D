@@ -115,12 +115,28 @@ void main() {
 
   // The source read one low FFT bin here. uBass is that same measurement, so the
   // wash behind the network still breathes with the track.
-  float glow = -uv.y * p_glow;
+  //
+  // Symmetric about the middle of the frame rather than running off the bottom
+  // of it. The original gradient was -uv.y, which is negative over the whole top
+  // half: with p_glow at 3 that subtracted more light than the network put in,
+  // and the top of the picture was clamped to black whatever the nodes were
+  // doing. It is a wash behind the network, so it should never be able to take
+  // the network away.
+  float wash = (0.45 - 0.55 * uv.y) * p_glow * 0.5;
 
   vec3 baseCol = pal(0.15 + sin(t * 0.4) * 0.2 + uTime * 0.01);
-  vec3 col = baseCol * m + baseCol * glow;
+  vec3 col = baseCol * m + baseCol * max(wash, 0.0);
 
-  col *= 1.0 - dot(uv, uv);
+  // Depth haze, so the far layers have somewhere to sit and the corners are part
+  // of the picture rather than a hole in it.
+  col += pal(0.55 + sin(t * 0.2) * 0.15) * exp(-length(uv) * 1.6) * 0.10 * p_glow * 0.5;
+  col += baseCol * 0.035;
+
+  // The old vignette was 1 - dot(uv, uv), which reaches zero at radius 1 - and
+  // the corner of a 16:9 frame in these units is at 1.03, so the outer sixth of
+  // the picture was multiplied to nothing. This is the same idea at a strength
+  // that shades the corners instead of deleting them.
+  col *= 1.0 - 0.30 * smoothstep(0.35, 1.35, length(uv));
 
   fragColor = vec4(max(col, 0.0), 1.0);
 }

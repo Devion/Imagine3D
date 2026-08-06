@@ -11,14 +11,14 @@
   "shader": "shader.frag",
   "params": {
     "refract": { "type": "float", "default": "0.9 + 0.5*bass", "min": 0, "max": 3,
-                 "description": "How hard the scene bends through the glyph edges." },
+                "description": "How hard the scene bends through the glyph edges." },
     "spread": { "type": "float", "default": "1.0", "min": 0.2, "max": 3,
-                "description": "Radius of the thickness field, in fractions of the frame — how far the glass extends past the letters." },
+               "description": "Radius of the thickness field, in fractions of the frame — how far the glass extends past the letters." },
     "rim": { "type": "float", "default": "0.8 + 0.5*beatPulse", "min": 0, "max": 3 },
     "glow": { "type": "float", "default": "0.5 + 0.4*high", "min": 0, "max": 2 },
     "shimmer": { "type": "float", "default": "0.7", "min": 0, "max": 2,
-                 "description": "Concentric heat ripple radiating off the letters." },
+                "description": "Concentric heat ripple radiating off the letters." },
     "cue": { "type": "float", "default": "cueT", "min": 0, "max": 1,
-             "description": "0..1 through the current line's lifetime; the glass swells as the line lands." }
+            "description": "0..1 through the current line's lifetime; the glass swells as the line lands." }
   }
 }

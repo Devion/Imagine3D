@@ -117,6 +117,6 @@ void main() {
   col *= 0.78 + 0.22 * step(0.5, fract(vUv.y * uResolution.y * 0.5));
 
   col *= 0.90 + 0.35 * uBeatPulse;
-  col *= 1.0 - 0.28 * pow(clamp(length(centered(vUv, uAspect) * vec2(0.5, 0.8)), 0.0, 1.0), 2.4);
+  col *= 1.0 - 0.13 * pow(clamp(length(centered(vUv, uAspect) * vec2(0.4, 0.62)), 0.0, 1.0), 2.6);
   fragColor = vec4(max(col, 0.0), 1.0);
 }

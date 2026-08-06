@@ -9,7 +9,7 @@
   "shader": "shader.frag",
   "params": {
     "sides": { "type": "float", "default": "0.0", "min": 0, "max": 12,
-               "description": "0 = a circle; 5-8 = a shutter aperture." },
+              "description": "0 = a circle; 5-8 = a shutter aperture." },
     "softness": { "type": "float", "default": "0.03", "min": 0, "max": 0.4 },
     "spin": { "type": "float", "default": "0.6", "min": -4, "max": 4 }
   }

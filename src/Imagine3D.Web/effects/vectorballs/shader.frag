@@ -1,78 +1,119 @@
 #include "common.glsl"
+#include "noise.glsl"
 #include "palette.glsl"
 
-// Sprite-based 3D. Each ball is projected to screen space and shaded as a sphere;
-// the nearest one wins per pixel, which is exactly the painter's-algorithm sprite
-// approach the originals used, just resolved per fragment instead of per blit.
+// Vector balls, opened out into a corridor.
+//
+// The technique is unchanged and is the whole point of the effect: every ball is
+// a sprite, shaded from its own disc as if it were a sphere, and the nearest one
+// wins the pixel. That is exactly what the Amiga did, resolved per fragment
+// instead of per blit.
+//
+// What changed is the framing. One formation of 28 balls hanging in the middle
+// of a black frame is how a 1990 demo framed it, on a 14-inch monitor. Projected
+// behind a band it is a small object with a lot of nothing around it, and a VJ
+// set spends most of its time looking at the nothing. So the camera flies *down*
+// a stack of rings of them instead: the near balls are metres across and blow
+// past the corners, the far ones converge on a vanishing point, and the frame is
+// full from edge to edge the whole way through.
+//
+// Sorting still costs nothing. Rings are visited near-to-far, so the first ball
+// that covers a pixel is the nearest one that can and the loop leaves early -
+// which is what pays for twelve times as many balls as the original drew.
 
-vec3 ballPosition(float i, float n, float t, float shape) {
-  float f = i / n;
-  if (shape < 0.5) {
-    // Double helix.
-    float a = f * TAU * 2.0 + t;
-    float side = mod(i, 2.0) * PI;
-    return vec3(cos(a + side) * 0.55, (f - 0.5) * 1.7, sin(a + side) * 0.55);
-  } else if (shape < 1.5) {
-    // Flat ring, tilted.
-    float a = f * TAU + t;
-    vec3 p = vec3(cos(a) * 0.75, 0.0, sin(a) * 0.75);
-    p.yz = rot(0.5) * p.yz;
-    return p;
-  }
-  // Fibonacci sphere shell.
-  float phi = acos(1.0 - 2.0 * (i + 0.5) / n);
-  float theta = PI * (1.0 + sqrt(5.0)) * i + t;
-  return vec3(sin(phi) * cos(theta), sin(phi) * sin(theta), cos(phi)) * 0.8;
+const float PITCH = 1.15;   // world spacing between rings
+
+/// Where ring `k` sits, given how far we have travelled. Ring 0 is the one just
+/// in front of the camera; higher k is further away.
+float ringDepth(float k, float travel) {
+  return 0.55 + PITCH * (k + fract(-travel / PITCH));
 }
 
 void main() {
   vec2 uv = centered(vUv, uAspect);
-  float t = uTime * p_spin;
+  float rad = length(uv);
 
-  vec3 col = palClamp(0.04) * (1.0 - 0.4 * length(uv));
+  float travel = uTime * p_speed;
+  float spin = uTime * p_spin;
 
-  float n = clamp(p_count, 6.0, 48.0);
-  float bestZ = 1e9;
+  // ---- the corridor the balls hang in ------------------------------------
+  // Never flat black: a haze down the throat plus a slow drift of cloud, so the
+  // gaps between balls read as distance rather than as holes in the picture.
+  vec3 col = palClamp(0.04 + 0.22 * exp(-rad * 1.1)) * 0.55;
+  col += palClamp(0.30) * fbm(uv * 1.3 + vec2(0.0, travel * 0.05), 4, 2.0, 0.5) * 0.09;
+  col += palClamp(0.85) * exp(-rad * 3.2) * (0.10 + 0.22 * uBeatPulse) * p_haze;
 
-  for (int i = 0; i < 48; i++) {
-    if (float(i) >= n) break;
-    float fi = float(i);
+  // Radial spokes converging on the vanishing point. Cheap, and it is what makes
+  // the throat read as a corridor before a single ball is drawn.
+  float spokes = 0.5 + 0.5 * sin(atan(uv.y, uv.x) * 12.0 + spin * 2.0);
+  col += palClamp(0.55) * spokes * exp(-rad * 2.2) * 0.07;
 
-    vec3 p = ballPosition(fi, n, t, p_shape);
+  float per = clamp(floor(p_count + 0.5), 4.0, 20.0);
+  float rings = clamp(floor(p_rings + 0.5), 4.0, 22.0);
 
-    // Rotate the whole formation.
-    p.xz = rot(t * 0.8) * p.xz;
-    p.yz = rot(sin(t * 0.4) * 0.6) * p.yz;
+  // Balls swell on the beat, and the ring radius breathes with the low end, so
+  // the corridor opens and closes rather than the balls merely flashing.
+  float open = p_spread * (1.0 + 0.16 * uBass + 0.10 * uBeatPulse);
 
-    // Perspective projection.
-    float z = p.z + 2.6;
-    if (z < 0.15) continue;
-    vec2 sp = p.xy * (2.0 / z);
-    float r = p_radius * (2.0 / z);
+  bool hit = false;
 
-    vec2 d = uv - sp;
-    float dist = length(d);
-    if (dist > r) continue;
-    if (z > bestZ) continue;      // something nearer already covers this pixel
-    bestZ = z;
+  for (int k = 0; k < 22; k++) {
+    if (float(k) >= rings || hit) break;
+    float fk = float(k);
 
-    // Sphere normal from the sprite's own disc, so it shades like geometry.
-    float k = sqrt(max(0.0, 1.0 - (dist / r) * (dist / r)));
-    vec3 normal = normalize(vec3(d / r, k));
+    float z = ringDepth(fk, travel);
+    if (z < 0.12) continue;
 
-    vec3 lightDir = normalize(vec3(-0.4, 0.6, 0.7));
-    float diff = max(0.0, dot(normal, lightDir));
-    float spec = pow(max(0.0, dot(normal, normalize(lightDir + vec3(0.0, 0.0, 1.0)))), 32.0);
+    // Which ring this actually is in world terms - the index has to survive the
+    // recycling or every ring would change its identity as the stack scrolls,
+    // and the corkscrew would jitter once per pitch.
+    float id = floor(travel / PITCH) + fk;
 
-    vec3 base = pal(fract(fi / n + uTime * 0.05));
-    vec3 ball = base * (0.2 + 0.85 * diff) + vec3(spec) * 0.7;
+    float scale = 2.0 / z;
+    float ringR = open * (0.85 + 0.35 * sin(id * 0.41));
+    float roll = spin * 0.6 + id * p_twist;
 
-    // Darken with distance so the formation reads in depth.
-    ball *= mix(1.15, 0.4, sat((z - 1.6) / 2.4));
+    // A ring whose whole projected disc misses this pixel cannot contain the
+    // ball that covers it. One length() throws out the rest of the ring.
+    float ballR = p_radius * scale;
+    if (abs(rad - ringR * scale) > ballR + 1e-3) continue;
 
-    col = ball;
+    for (int i = 0; i < 20; i++) {
+      if (float(i) >= per) break;
+      float a = (float(i) + 0.5) / per * TAU + roll;
+
+      vec2 sp = vec2(cos(a), sin(a)) * ringR * scale;
+      vec2 d = uv - sp;
+      float dist = length(d);
+      if (dist > ballR) continue;
+
+      // Sphere normal from the sprite's own disc, so it shades like geometry.
+      float kz = sqrt(max(0.0, 1.0 - (dist / ballR) * (dist / ballR)));
+      vec3 normal = vec3(d / ballR, kz);
+
+      vec3 lightDir = normalize(vec3(-0.35, 0.55, 0.76));
+      float diff = max(0.0, dot(normal, lightDir));
+      float spec = pow(max(0.0, dot(normal, normalize(lightDir + vec3(0.0, 0.0, 1.0)))), 40.0);
+
+      // Colour runs around the ring and along the corridor at once, so the
+      // stack is a moving gradient rather than a repeating pattern.
+      vec3 base = pal(fract(float(i) / per * 0.7 + id * 0.055 + uTime * 0.04));
+      vec3 ball = base * (0.16 + 0.95 * diff) + vec3(spec) * 0.85;
+
+      // Rim, which is what separates two balls that overlap in screen space.
+      ball += base * pow(1.0 - kz, 3.0) * 0.55;
+
+      // Depth. Near balls run hot and blow out slightly, far ones sink into the
+      // corridor haze rather than going black, so the stack has no visible end.
+      ball *= mix(1.5, 0.55, sat((z - 0.6) / 7.0));
+      ball = mix(ball, palClamp(0.18) * 0.5, smoothstep(4.0, 13.0, z));
+
+      col = ball;
+      hit = true;
+      break;
+    }
   }
 
-  col *= 0.9 + 0.3 * uBeatPulse;
-  fragColor = vec4(col, 1.0);
+  col *= 0.92 + 0.28 * uBeatPulse;
+  fragColor = vec4(max(col, 0.0), 1.0);
 }

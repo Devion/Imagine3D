@@ -88,12 +88,16 @@ void main() {
     // below covers where it stops being enough.
     float lw = clamp(0.010 * tHit, 0.010, 0.45);
     float line = smoothstep(lw, 0.0, min(gl.x, gl.y));
-    col += mix(phos, palClamp(0.55), 0.6) * line * exp(-tHit * 0.10) * 0.30;
+    col += mix(phos, palClamp(0.55), 0.6) * line * exp(-tHit * 0.10) * 0.60;
+    // The floor itself, not just its rules. A ruled plane over black is a wire
+    // diagram; a dim lit plane under it is a room the stack is standing in.
+    col += palClamp(0.30) * exp(-tHit * 0.16) * 0.16;
   }
 
   // Haze toward the vanishing point, so the far end of the stack has somewhere
   // to go instead of just stopping.
-  col += palClamp(0.45) * exp(-length(p - vec2(0.0, 0.06)) * 2.2) * 0.10 * p_glow;
+  col += palClamp(0.45) * exp(-length(p - vec2(0.0, 0.06)) * 1.5) * 0.22 * p_glow;
+  col += palClamp(0.22) * 0.05;
 
   // --- the stack ----------------------------------------------------------
   int layers = int(clamp(p_layers, 2.0, 48.0));
@@ -137,7 +141,7 @@ void main() {
     float bw = 0.0020 * p_beam * mix(1.0, 0.45, fk / float(layers));
     // The gun writes more charge where it dwells, so a steep edge comes out
     // dimmer than a flat top - and depth takes the rest.
-    float bright = exp(-fk * 0.085) * (0.35 + 0.65 * g);
+    float bright = exp(-fk * 0.055) * (0.35 + 0.65 * g);
     vec3 c = mix(phos, palClamp(0.20 + 0.65 * fk / float(layers)), 0.25 + 0.55 * fk / float(layers));
 
     col += c * glowLine(d, bw, bw * 3.2, aa) * bright;
@@ -150,7 +154,10 @@ void main() {
   // Quantised to 24 Hz so the tube hisses at the same rate whatever the render
   // frame rate is.
   col *= 0.96 + 0.07 * hash12(floor(vUv * uResolution) + floor(uTime * 24.0) * 37.0);
-  col *= 1.0 - 0.40 * pow(clamp(length(centered(vUv, uAspect) * vec2(0.55, 0.85)), 0.0, 1.0), 2.2);
+  // The tube's own falloff. Light: the stack already dims into its own depth,
+  // and stacking a strong vignette on top of that darkened the two corners the
+  // near layers actually reach.
+  col *= 1.0 - 0.18 * pow(clamp(length(centered(vUv, uAspect) * vec2(0.45, 0.70)), 0.0, 1.0), 2.4);
 
   fragColor = vec4(max(col, 0.0), 1.0);
 }

@@ -9,7 +9,7 @@
   "shader": "shader.frag",
   "params": {
     "angle": { "type": "float", "default": "0.0", "min": 0, "max": 6.2832,
-               "description": "Push direction in radians. 0 pushes left." },
+              "description": "Push direction in radians. 0 pushes left." },
     "blur": { "type": "float", "default": "0.5", "min": 0, "max": 2 },
     "overshoot": { "type": "float", "default": "0.06", "min": 0, "max": 0.4 }
   }

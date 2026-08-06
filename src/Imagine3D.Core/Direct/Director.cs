@@ -98,12 +98,21 @@ public sealed class Director(EffectRegistry registry)
             var tags = BuildTags(sec, si, intent);
             double intensity = si?.Intensity is > 0 ? si.Intensity : sec.Energy;
 
+            // What the scene before this one looked like, and whether the music
+            // wants this boundary to be a break. Both feed the pick: where
+            // nothing is breaking, a scene the edit can flow into is worth a
+            // little; where something is, it is worth nothing.
+            var previousEffect = i > 0 ? registry.Get(scenes[i - 1].EffectId) : null;
+            double prevSectionEnergy = i > 0 ? sections[i - 1].Energy : 0;
+            bool wantsBreak = intensity - prevSectionEnergy > 0.15 || sec.BoundaryStrength > 0.72;
+
             // The auto pick is drawn even when the opener is pinned, so the two
             // paths consume the same number of RNG draws. That is all it buys:
             // the pinned id goes into `recent` and reweights every later scene,
             // so roughly half the storyboard still moves. Pinning the opener is
             // not a way to keep the rest of a plan you liked.
-            var pick = PickScene(candidates, tags, intensity, recent, cast, rng);
+            var pick = PickScene(candidates, tags, intensity, recent, cast, rng,
+                                 previousEffect, wantsBreak);
 
             // A scene the user picked by hand outranks the opening-effect setting:
             // both are the user's intent, but one is about this scene of this plan
@@ -149,6 +158,10 @@ public sealed class Director(EffectRegistry registry)
                 Why: (held is not null ? "chosen by hand"
                       : pinned is not null ? "pinned as the opening effect"
                       : Explain(pick, tags, intensity))
+                     + (outgoing is null ? ""
+                        : $" | out of {outgoing.Id}: {outgoing.Motion}/{outgoing.Focus} -> " +
+                          $"{pick.Motion}/{pick.Focus}, flow {Flow.Affinity(outgoing, pick):0.00} " +
+                          $"({Flow.Describe(Flow.Affinity(outgoing, pick))})")
                      + (blend is null ? "" : $" - blended ({blend.Mode})"),
                 Blend: blend,
                 Locked: held is not null));
@@ -294,9 +307,24 @@ public sealed class Director(EffectRegistry registry)
             e => e.Id.Equals(was.EffectId, StringComparison.OrdinalIgnoreCase));
     }
 
+    /// What a scene that flows out of the one before it is worth, in score units.
+    ///
+    /// Small on purpose. Tags and energy still decide what a section gets; this
+    /// only breaks ties between candidates that already fit, in favour of the one
+    /// the edit can actually get to. Larger than about 1.2 and the whole video
+    /// converges on one motion class, because every pick then reinforces the next.
+    ///
+    /// It deliberately pulls against SimilarCost, and the two are about different
+    /// things: SimilarCost is content repetition - three fractals in a row read as
+    /// one effect that would not stop - where this is continuity of form. Two
+    /// corridor flights with nothing else in common flow into each other and do
+    /// not read as a repeat.
+    const double FlowBonus = 0.85;
+
     EffectManifest PickScene(
         List<EffectManifest> candidates, TagWeight[] tags, double energy,
-        List<string> recent, IReadOnlyDictionary<string, double> cast, Random rng)
+        List<string> recent, IReadOnlyDictionary<string, double> cast, Random rng,
+        EffectManifest? outgoing = null, bool wantsBreak = false)
     {
         // Energy is a hard gate, not a preference.
         //
@@ -314,7 +342,17 @@ public sealed class Director(EffectRegistry registry)
         if (eligible.Count == 0)
             eligible = candidates.OrderBy(e => e.EnergyMiss(energy)).Take(4).ToList();
 
-        var scored = eligible.Select(e => (Item: e, Score: Score(e, tags, energy, recent, cast))).ToList();
+        // Where the music is not asking for a break, prefer a picture the edit
+        // can flow into. Where it is, this is switched off entirely - a scene
+        // that arrives on a downbeat after a big lift is supposed to be a
+        // different thing, and smoothing that over is the opposite of the job.
+        var scored = eligible.Select(e => (
+            Item: e,
+            Score: Score(e, tags, energy, recent, cast)
+                   + (wantsBreak || outgoing is null
+                      ? 0.0
+                      : FlowBonus * (Flow.Affinity(outgoing, e) - 0.5) * 2.0))).ToList();
+
         return SampleByScore(scored, rng, Temperature);
     }
 
@@ -515,12 +553,32 @@ public sealed class Director(EffectRegistry registry)
         // Too short to establish a layered look.
         if (sec.Duration < MinSceneSeconds * 1.5) return null;
 
+        // Two pictures that share nothing must not be layered.
+        //
+        // A blend holds both on screen for seconds, so it asks far more of the
+        // pair than a one-second dissolve does: the eye has to be able to read
+        // them as one image. Where they disagree about which way the frame is
+        // travelling - a flight into the screen over one falling away from it -
+        // there is no reading, and the result is mush that looks like a bug.
+        // Below the floor the boundary goes to PickTransition to be cut.
+        //
+        // LayerAffinity, not Affinity: it leaves the coverage gap out, because a
+        // coverage gap is an argument *for* layering rather than against it. See
+        // the note there.
+        double affinity = Flow.LayerAffinity(outgoing, scene);
+        if (affinity < Flow.BlendFloor) return null;
+
         // Emptying out is the one case where layering is clearly the right answer
         // rather than merely a nicer one: the outgoing scene stays underneath and
         // thins away, so the frame is never asked to be full and empty in the same
-        // instant. At a full drop this takes the odds from 45% to near certain.
+        // instant. At a full drop this takes the odds to near certain.
+        //
+        // Affinity is the other half of the same question. A pair that shares its
+        // motion and its framing is what layering was invented for, and a pair
+        // that only just clears the floor should get it occasionally rather than
+        // half the time.
         double emptying = Emptying(outgoing, scene);
-        if (rng.NextDouble() > 0.45 + emptying * 0.85) return null;
+        if (rng.NextDouble() > 0.22 + affinity * 0.85 + emptying * 0.90) return null;
 
         var pool = energy > 0.55 ? HotBlends : CoolBlends;
         var mode = pool[rng.Next(pool.Length)];
@@ -580,6 +638,9 @@ public sealed class Director(EffectRegistry registry)
         double emptying = Emptying(outgoing, incoming);
         bool cliff = emptying > EmptyingGap;
 
+        // How well these two pictures can become one another. See Flow.
+        double affinity = Flow.Affinity(outgoing, incoming);
+
         // A hard boundary into a louder section wants a cut; a gentle one into a
         // quieter section wants a dissolve. This is the single most audible way the
         // edit either matches the music or fights it.
@@ -588,8 +649,19 @@ public sealed class Director(EffectRegistry registry)
         // next to each other, and when one of them cannot fill the frame the other
         // just left, it is not a statement, it is a hole - so the music no longer
         // gets to ask for one.
-        bool hard = !cliff && (energyDelta > 0.15 || sec.BoundaryStrength > 0.72);
-        bool soft = energyDelta < -0.1;
+        //
+        // The picture gets to ask for one, though. Two shots travelling opposite
+        // ways share no optical flow for a dissolve to ride on, and mixing them
+        // slowly just shows both at once for a second and a half. A cut says
+        // "these are two different things", which is true and is also the easiest
+        // thing for the eye to follow. Over a cliff the hole still outranks it.
+        bool mismatch = !cliff && affinity < Flow.CutBelow;
+        bool hard = !cliff && (mismatch || energyDelta > 0.15 || sec.BoundaryStrength > 0.72);
+
+        // Conversely a pair that agrees about everything can take a long mix,
+        // whatever the music is doing - the two shots are near enough the same
+        // picture that a dissolve reads as one continuous move.
+        bool soft = !hard && (energyDelta < -0.1 || affinity >= 0.82);
 
         var wanted = hard ? new[] { "hard", "impact", "glitch" }
                    : cliff ? ["soft", "dissolve", "cinematic"]
@@ -622,6 +694,12 @@ public sealed class Director(EffectRegistry registry)
         double dur = hard ? 0.12 + rng.NextDouble() * 0.25
                    : soft ? 1.2 + rng.NextDouble() * 1.6
                    : 0.5 + rng.NextDouble() * 1.0;
+
+        // A mix is only worth having for as long as the two shots have something
+        // in common. Scaled by affinity rather than set by the music alone: a
+        // well-matched pair can hold a long dissolve and look deliberate, and a
+        // badly matched one looks like a fault the longer it runs.
+        if (!hard) dur *= 0.65 + 0.75 * affinity;
 
         // However the music reads, the picture needs time in proportion to how far
         // it has to travel. A 0.5s wipe between two comparable frames is brisk;

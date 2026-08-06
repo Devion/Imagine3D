@@ -8,10 +8,7 @@
   "description": "Draws the lyric layer over the scene. uAmount selects the style: 0 wavy sine (the Amiga scroller look), 1 beat slam, 2 soft fade, 3 horizontal scroll.",
   "shader": "shader.frag",
   "params": {
-    "cue": {
-      "type": "float",
-      "default": "cueT",
-      "description": "0..1 through the current line's lifetime; supplied by the renderer."
-    }
+    "cue": { "type": "float", "default": "cueT",
+            "description": "0..1 through the current line's lifetime; supplied by the renderer." }
   }
 }

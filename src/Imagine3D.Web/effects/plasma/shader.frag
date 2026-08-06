@@ -22,8 +22,22 @@ void main() {
   float shifted = v + uTime * p_cycle;
   vec3 col = p_steps > 2.0 ? palSteps(shifted, p_steps) : pal(shifted);
 
-  // Radial falloff keeps the frame from reading as flat wallpaper, and the beat
-  // opens it up briefly.
-  float vig = 1.0 - 0.35 * length(centered(vUv, uAspect)) * (1.0 - 0.4 * uBeatPulse);
-  fragColor = vec4(col * vig, 1.0);
+  // Depth, rather than a vignette.
+  //
+  // The frame used to be darkened by radius alone, which on 16:9 took the
+  // corners down by a third for no reason other than to stop the plasma reading
+  // as flat wallpaper. It does stop that, and it also throws away the outer
+  // sixth of every frame. A second copy of the field sampled further out - a
+  // parallax layer, moving slower and dimmer - answers the same objection by
+  // giving the picture a behind instead of an edge.
+  vec2 far = rot(-t * 0.08) * p * 0.45;
+  float w = sin(far.x * 1.3 - t * 0.6) + sin(far.y * 1.1 + t * 0.5)
+          + sin(length(far) * 1.7 + t * 0.4);
+  w = w * 0.1667 + 0.5;
+  col = mix(palClamp(w) * 0.55, col, 0.72 + 0.16 * uBeatPulse);
+
+  // What is left of the falloff: a shade at the corners, not a hole.
+  float vig = 1.0 - 0.16 * pow(length(centered(vUv, uAspect)) * 0.55, 2.0)
+                    * (1.0 - 0.4 * uBeatPulse);
+  fragColor = vec4(max(col * vig, 0.0), 1.0);
 }

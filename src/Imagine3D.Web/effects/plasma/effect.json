@@ -4,8 +4,10 @@
   "kind": "scene2d",
   "tags": ["amiga", "retro", "psychedelic", "abstract", "organic", "calm"],
   "energyRange": [0.1, 0.7],
-  "coverage": 0.48,
+  "coverage": 0.62,
   "aspects": ["16:9", "9:16"],
+  "motion": "churn",
+  "focus": "spread",
   "cost": "low",
   "description": "The classic summed-sine plasma with a cycling palette. Scale punches on the beat and the palette drifts with the bass.",
   "shader": "shader.frag",
@@ -14,6 +16,6 @@
     "speed": { "type": "float", "default": "0.35 + 0.5*rms", "min": 0, "max": 3 },
     "cycle": { "type": "float", "default": "0.08 + 0.25*bass", "min": 0, "max": 2 },
     "steps": { "type": "float", "default": "0", "min": 0, "max": 32,
-               "description": "0 = smooth gradient; >2 quantises to that many hard colour bands (true copper-list look)." }
+              "description": "0 = smooth gradient; >2 quantises to that many hard colour bands (true copper-list look)." }
   }
 }

@@ -1,4 +1,20 @@
-// Hero-object showcase: one model from the asset library, lit and rotating.
+// A swarm of one model from the asset library, flown through.
+//
+// It used to draw a single copy on a plinth, framed dead centre. That is the
+// right shot for a product page and the wrong one for a video: a prop with its
+// longest axis normalised to one unit, seen from two units away, occupies a
+// small disc in the middle of a 1080p frame and leaves the rest to a background
+// gradient. Roughly a fifth of the screen was ever the subject.
+//
+// Same model, instanced down a corridor. Copies sit on a helix around the view
+// axis and the camera flies along it, so one of them is always close enough to
+// overrun the frame while the rest recede to a vanishing point. Each has its own
+// spin and its own place on the helix, so the formation reads as a flock rather
+// than as a repeated sprite.
+//
+// One draw call per copy rather than hardware instancing: this is a dozen draws
+// of a mesh that is already resident, and adding an instanced attribute buffer
+// would mean a second vertex shader for the sake of eleven draw calls.
 //
 // This is a `module` effect rather than a fragment shader because it draws real
 // geometry - it needs its own vertex stage, a depth buffer and matrices.
@@ -53,8 +69,11 @@ export default class MeshShowcase {
     ]);
     this.prog = createProgram(gl, vertSrc, fragSrc, `effect "${this.id}" mesh`);
 
-    // Fullscreen background pass, so the model is not floating on flat black.
+    // Fullscreen background pass. It is a corridor rather than a backdrop: the
+    // swarm is travelling, and a static radial gradient behind moving geometry
+    // reads as a sticker over a photograph.
     this.bg = createProgram(gl, VERTEX_SHADER, `${UNIFORM_PREAMBLE}
+uniform float uTravel;
 vec3 palC(float t) {
   t = clamp(t, 0.0, 0.9999);
   float f = t * 4.0; int i = int(floor(f)); float k = smoothstep(0.0, 1.0, fract(f));
@@ -63,13 +82,29 @@ vec3 palC(float t) {
   if (i == 2) return mix(uPal2, uPal3, k);
   return mix(uPal3, uPal4, k);
 }
+float h12(vec2 p) {
+  vec3 q = fract(vec3(p.xyx) * 0.1031);
+  q += dot(q, q.yzx + 33.33);
+  return fract((q.x + q.y) * q.z);
+}
 void main() {
   vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0);
-  float r = length(p);
-  vec3 col = mix(palC(0.22), palC(0.02), smoothstep(0.0, 0.8, r));
-  col += palC(0.9) * exp(-r * 6.0) * 0.25 * (0.5 + uBeatPulse);
+  float r = max(length(p), 1e-4);
+  float a = atan(p.y, p.x);
+
+  vec3 col = mix(palC(0.30), palC(0.01), smoothstep(0.0, 0.9, r));
+  col += palC(0.92) * exp(-r * 5.0) * 0.30 * (0.5 + uBeatPulse);
+
+  // Streaks converging on the vanishing point, so the corridor has a direction
+  // even where there is no geometry in it.
+  float lane = floor(a / 6.28318530718 * 48.0 + 0.5);
+  float across = abs(fract(a / 6.28318530718 * 48.0 + 0.5) - 0.5) * r * 2.0;
+  float depth = fract(1.0 / r * 0.35 + uTravel * 0.20 + h12(vec2(lane, 3.0)) * 7.0);
+  col += palC(0.6 + 0.35 * h12(vec2(lane, 9.0)))
+         * exp(-across * 26.0) * (1.0 - depth) * 0.28 * step(0.55, h12(vec2(lane, 1.0)));
+
   fragColor = vec4(col, 1.0);
-}`, 'showcase background');
+}`, 'showcase corridor');
 
     await this.loadModel(ctx);
 
@@ -79,6 +114,7 @@ void main() {
     this.nrm = new Float32Array(9);
     this.tmp = mat4.create();
     this.tmp2 = mat4.create();
+    this.base = mat4.create();
     this.ready = true;
   }
 
@@ -115,6 +151,10 @@ void main() {
     const m = state.mod;
     const pal = state.palette;
 
+    const count = Math.max(1, Math.min(24, Math.round(params.count ?? 12)));
+    const pitch = Math.max(0.4, params.pitch ?? 2.2);
+    const travel = m.t * (params.flow ?? 1.2);
+
     // ---- background ----
     gl.disable(gl.DEPTH_TEST);
     gl.useProgram(this.bg.program);
@@ -123,6 +163,7 @@ void main() {
     if (bu.uAspect) gl.uniform1f(bu.uAspect, state.width / state.height);
     if (bu.uBeatPulse) gl.uniform1f(bu.uBeatPulse, m.beatPulse);
     if (bu.uTime) gl.uniform1f(bu.uTime, m.t);
+    if (bu.uTravel) gl.uniform1f(bu.uTravel, travel);
     for (let i = 0; i < 5; i++) {
       const loc = bu[`uPal${i}`];
       if (loc) gl.uniform3f(loc, pal[i][0], pal[i][1], pal[i][2]);
@@ -131,7 +172,7 @@ void main() {
 
     if (!this.ready || !this.mesh) return;
 
-    // ---- model ----
+    // ---- the swarm ----
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LEQUAL);
     gl.clear(gl.DEPTH_BUFFER_BIT);
@@ -146,48 +187,75 @@ void main() {
     // into the distance. See coreBounds() in engine/mesh.js.
     const s = 1 / this.mesh.coreExtent;
     const c = this.mesh.coreCentre;
-
     mat4.scale(this.tmp, s);
     mat4.translate(this.tmp2, -c[0], -c[1], -c[2]);
-    mat4.multiply(this.model, this.tmp, this.tmp2);
+    mat4.multiply(this.base, this.tmp, this.tmp2);
 
-    mat4.rotateY(this.tmp, m.t * (params.spin ?? 0.4));
-    mat4.multiply(this.model, this.tmp, this.model);
+    // The camera sits still and the swarm comes to it, which keeps the fog
+    // distances - and so the whole depth read - fixed in screen terms rather
+    // than sliding as the scene runs.
+    const eye = [Math.sin(m.t * 0.11) * 0.30, Math.sin(m.t * 0.08) * 0.22, 0];
+    mat4.lookAt(this.view, eye,
+      [eye[0] + Math.sin(m.t * 0.06) * 0.2, eye[1] * 0.5, eye[2] + 1], [0, 1, 0]);
+    mat4.perspective(this.proj, 0.95, state.width / state.height, 0.05, 120);
 
-    mat4.rotateX(this.tmp, params.tilt ?? 0.25);
-    mat4.multiply(this.model, this.tmp, this.model);
-
-    const dist = Math.max(0.5, params.distance ?? 2.1);
-    const eye = [
-      Math.sin(m.t * 0.11) * 0.25 * dist,
-      0.25 * dist,
-      dist,
-    ];
-    mat4.lookAt(this.view, eye, [0, 0, 0], [0, 1, 0]);
-    mat4.perspective(this.proj, 0.85, state.width / state.height, 0.05, 60);
-    mat4.normalMatrix(this.nrm, this.model);
+    const far = count * pitch;
+    const radius = Math.max(0, params.radius ?? 1.5);
+    const spin = params.spin ?? 0.4;
+    const tilt = params.tilt ?? 0.25;
 
     gl.useProgram(this.prog.program);
     const u = this.prog.uniforms;
-    if (u.uModel) gl.uniformMatrix4fv(u.uModel, false, this.model);
     if (u.uView) gl.uniformMatrix4fv(u.uView, false, this.view);
     if (u.uProj) gl.uniformMatrix4fv(u.uProj, false, this.proj);
-    if (u.uNormalMat) gl.uniformMatrix3fv(u.uNormalMat, false, this.nrm);
     if (u.uEye) gl.uniform3f(u.uEye, eye[0], eye[1], eye[2]);
     if (u.uBeatPulse) gl.uniform1f(u.uBeatPulse, m.beatPulse);
     if (u.uEnergy) gl.uniform1f(u.uEnergy, m.energy);
     if (u.uTime) gl.uniform1f(u.uTime, m.t);
     if (u.uRim) gl.uniform1f(u.uRim, params.rim ?? 1);
     if (u.uWire) gl.uniform1f(u.uWire, params.wire ?? 0);
-    if (u.uFogNear) gl.uniform1f(u.uFogNear, dist * 0.9);
-    if (u.uFogFar) gl.uniform1f(u.uFogFar, dist * 2.6);
+    // Fog spans the whole corridor, so a copy fades out at the far end instead
+    // of being clipped away by the near plane the moment it is born.
+    if (u.uFogNear) gl.uniform1f(u.uFogNear, far * 0.30);
+    if (u.uFogFar) gl.uniform1f(u.uFogFar, far * 0.98);
     for (let i = 0; i < 5; i++) {
       const loc = u[`uPal${i}`];
       if (loc) gl.uniform3f(loc, pal[i][0], pal[i][1], pal[i][2]);
     }
 
-    // Subject only: any studio backdrop shipped with the model is left out.
-    this.mesh.drawSubject();
+    // Golden-angle spacing round the helix: any rational fraction of a turn puts
+    // the copies into visible spokes, and this is the one that never repeats.
+    const GOLDEN = Math.PI * (3 - Math.sqrt(5));
+    const wrap = ((travel % pitch) + pitch) % pitch;
+
+    for (let i = 0; i < count; i++) {
+      // Depth recycles, so a copy is never seen being born: it appears at the
+      // far end of the fog, where it is already invisible.
+      const z = 0.9 + i * pitch - wrap;
+      const idx = i + Math.floor(travel / pitch);
+
+      const a = idx * GOLDEN + m.t * (params.swirl ?? 0.25);
+      const rr = radius * (0.55 + 0.75 * fract01(idx * 0.7548776662));
+      const px = Math.cos(a) * rr;
+      const py = Math.sin(a) * rr * 0.7;
+
+      mat4.rotateY(this.tmp, m.t * spin * (0.6 + 0.9 * fract01(idx * 0.3247179572)) + idx);
+      mat4.multiply(this.model, this.tmp, this.base);
+
+      mat4.rotateX(this.tmp, tilt + Math.sin(m.t * 0.3 + idx) * 0.35);
+      mat4.multiply(this.model, this.tmp, this.model);
+
+      mat4.translate(this.tmp, px, py, z);
+      mat4.multiply(this.model, this.tmp, this.model);
+
+      mat4.normalMatrix(this.nrm, this.model);
+      if (u.uModel) gl.uniformMatrix4fv(u.uModel, false, this.model);
+      if (u.uNormalMat) gl.uniformMatrix3fv(u.uNormalMat, false, this.nrm);
+
+      // Subject only: any studio backdrop shipped with the model is left out.
+      this.mesh.drawSubject();
+    }
+
     gl.disable(gl.DEPTH_TEST);
   }
 
@@ -196,6 +264,12 @@ void main() {
     this.gl.deleteProgram(this.bg?.program);
     // Meshes are shared through the module-level cache, so they are not freed here.
   }
+}
+
+/** Deterministic 0..1 from an integer index — the per-copy variation source. */
+function fract01(x) {
+  const v = Math.sin(x * 127.1 + 311.7) * 43758.5453;
+  return v - Math.floor(v);
 }
 
 /** Compute flat normals for geometry that has none. */
