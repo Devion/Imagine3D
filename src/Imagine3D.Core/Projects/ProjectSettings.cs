@@ -69,6 +69,8 @@ public sealed class ProjectSettings
 
     public LtxSettings Ltx { get; set; } = new();
 
+    public ImageSettings Images { get; set; } = new();
+
     /// Populated by the analyser, surfaced in the UI. Not user-editable.
     public string? SourceMp3 { get; set; }
     public string? SourceTxt { get; set; }
@@ -105,10 +107,42 @@ public sealed class ProjectSettings
         OpeningEffect = (OpeningEffect ?? "").Trim();
         TrimMinutes = Math.Clamp(TrimMinutes, 0.25, 60);
         TrimTargetMb = TrimTargetMb <= 0 ? 0 : Math.Clamp(TrimTargetMb, 5, 4000);
+        Images ??= new ImageSettings();      // absent from a project.json written before images existed
+        Images.Normalize();
         if (Seed == 0) Seed = 1;
         var (w, h) = Resolution;
         Width = Even(w);
         Height = Even(h);
+    }
+}
+
+/// How the project's own images are used. The files live in images/; this says
+/// how freely the director may reach for them.
+public sealed class ImageSettings
+{
+    /// Off means the director never places one, however many are in the folder.
+    /// On with an empty folder costs nothing, so this stays on by default.
+    public bool Enabled { get; set; } = true;
+
+    /// Roughly what share of scenes may carry an image, 0..1. Which scenes is
+    /// still the director's decision, and a long scene takes two or three separate
+    /// hits rather than one hold - this only says how much of the video the images
+    /// are allowed to reach.
+    public double Density { get; set; } = 0.4;
+
+    /// How many times one image may appear when there are fewer images than the
+    /// density asks for.
+    ///
+    /// Uniqueness is the point: with twenty images and nine hits every hit gets
+    /// its own picture. With one image and nine hits, nine appearances of the same
+    /// photograph is not nine events, it is a background - so the count is capped
+    /// at what the library can cover without repeating itself into wallpaper.
+    public int MaxUsesPerImage { get; set; } = 3;
+
+    public void Normalize()
+    {
+        Density = Math.Clamp(Density, 0, 1);
+        MaxUsesPerImage = Math.Clamp(MaxUsesPerImage, 1, 20);
     }
 }
 

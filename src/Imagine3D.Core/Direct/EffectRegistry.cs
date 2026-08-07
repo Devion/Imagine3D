@@ -74,6 +74,18 @@ public sealed record EffectManifest
     /// rather than the director carrying a list of ids it has opinions about.
     public double Rarity { get; init; } = 1.0;
 
+    /// This effect draws one of the project's images rather than merely being
+    /// allowed to - uImage is bound for every pass of a scene that has a cue, so
+    /// any effect *may* sample it, and this is the ones that fall apart without.
+    ///
+    /// Two consequences, both of which are the point of declaring it. The director
+    /// will not pick the effect at all for a project with no images, because an
+    /// image effect with no image renders a black frame. And when it does pick it,
+    /// that scene is given a cue whether or not the density asked for one, and the
+    /// cue composites nothing on its own: the effect is already showing the
+    /// picture, so laying it behind or over as well would show it twice.
+    public bool UsesImage { get; init; }
+
     public Dictionary<string, EffectParam> Params { get; init; } = [];
 
     public string Description { get; init; } = "";

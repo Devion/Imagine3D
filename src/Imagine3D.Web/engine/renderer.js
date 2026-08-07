@@ -1,7 +1,7 @@
 // The compositor. Given a time t it produces one finished frame:
 //
-//   scene -> its own post stack  ->  [transition with the outgoing scene,
-//                                     graded the same way]
+//   scene -> [project image] -> its own post stack  ->  [transition with the
+//                                     outgoing scene, graded the same way]
 //         ->  LTX blend  ->  text  ->  output
 //
 // Each scene is graded before the two are mixed, not after. See
@@ -24,6 +24,11 @@ import { compileExpr } from './expr.js';
 export const BLEND_MODES = [
   'normal', 'add', 'multiply', 'screen', 'difference', 'overlay', 'xor',
   'subtract', 'lighten', 'darken', 'dodge', 'burn', 'softlight', 'and', 'or',
+];
+
+/** Order must match the IMG_* constants in shaders/image.glsl. */
+export const IMAGE_TREATMENTS = [
+  'ripple', 'wave', 'swirl', 'kaleido', 'tunnel', 'slice', 'mosaic', 'bulge',
 ];
 
 const COPY_FRAG = `${UNIFORM_PREAMBLE}
@@ -60,6 +65,7 @@ export class Renderer {
     this.seed = 0;
     this.scenePrograms = new Map();
     this.videos = new Map();
+    this.images = new Map();
     // Clips that timed out seeking, so the warning is reported once per clip
     // rather than once per frame.
     this.stuckClips = new Set();
@@ -109,6 +115,7 @@ export class Renderer {
     wanted.add('textcomposite');
     wanted.add('videoblend');
     wanted.add('sceneblend');
+    if (storyboard.images?.length) wanted.add('imagelayer');
 
     for (const id of wanted) {
       if (!this.registry.get(id)) {
@@ -144,6 +151,13 @@ export class Renderer {
       this.compiled.set(`ltx${insert.index}`, { __opacity: compileExpr(insert.opacity) });
     }
 
+    const imageLayer = this.registry.get('imagelayer');
+    for (const cue of storyboard.images ?? []) {
+      if (!imageLayer) break;
+      this.compiled.set(`img${cue.index}`, compileSceneParams(imageLayer, cue.params));
+      this.compiled.set(`imga${cue.index}`, { __opacity: compileExpr(cue.opacity) });
+    }
+
     // The utility passes take their parameters straight from the manifest
     // defaults; they have no storyboard entry to override them.
     for (const id of ['textcomposite', 'videoblend']) {
@@ -151,8 +165,50 @@ export class Renderer {
       if (m) this.compiled.set(`util:${id}`, compileSceneParams(m, null));
     }
 
+    await this.loadImages(storyboard.images ?? []);
     await this.loadVideos(storyboard.ltx ?? []);
     return this.warnings;
+  }
+
+  /**
+   * Upload every image the plan names, once each however many cues use it.
+   *
+   * Mipmapped, unlike the LTX clips: a photograph is typically several times the
+   * output width and the cues zoom and drift through it, so a straight LINEAR
+   * minification aliases on every edge in the picture - which on a slow push
+   * reads as the image crawling.
+   */
+  async loadImages(cues) {
+    const gl = this.gl;
+    for (const file of new Set(cues.map((c) => c.file))) {
+      const img = new Image();
+      img.src = `${this.mediaBase}/images/${encodeURIComponent(file)}`;
+
+      try {
+        await img.decode();
+      } catch {
+        // A missing or unreadable image costs its cues, not the video - the same
+        // as an effect the plan names that is no longer in the library.
+        this.warnings.push(`could not load image "${file}" - the scenes using it render without it`);
+        continue;
+      }
+
+      const tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+      this.images.set(file, {
+        tex,
+        aspect: (img.naturalWidth || 1) / Math.max(1, img.naturalHeight),
+      });
+    }
   }
 
   /**
@@ -233,9 +289,46 @@ export class Renderer {
       feedback: this.feedback.texture,
       video: this.blank,
       text: this.text.texture,
+      image: this.blank,
+      imageAspect: 1,
+      // Any effect may sample uImage; this is how it knows whether there is
+      // anything there. Without it an effect built around a picture renders a
+      // black frame wherever it is drawn with no cue running - the gallery, the
+      // contact sheet, the probe - and a black frame is exactly the failure
+      // nobody notices until it is in a video.
+      hasImage: 0,
       videoAmount: 0,
       ...overrides,
     };
+  }
+
+  /** The cue running on this scene at time t, or null. */
+  imageCue(scene, t) {
+    const cues = this.storyboard.images;
+    if (!cues?.length) return null;
+
+    // Clamped into the scene's own span. While a transition or a blend runs, the
+    // outgoing scene is drawn at a time past its own end - an unclamped lookup
+    // drops its image on the first frame of the edit, which is a pop *before*
+    // the transition rather than during it. Same reasoning as grading each scene
+    // separately; see renderSceneWithPost.
+    const tt = Math.min(Math.max(t, scene.start), scene.end);
+    for (const c of cues)
+      if (c.sceneIndex === scene.index && tt >= c.start && tt <= c.end) return c;
+    return null;
+  }
+
+  /**
+   * What the cue's image should be bound as, plus the evaluated pass state.
+   * Returns null when the cue names an image that could not be loaded.
+   */
+  imageTextures(cue, scene, t) {
+    const img = this.images.get(cue.file);
+    if (!img) return null;
+
+    const tt = Math.min(Math.max(t, scene.start), scene.end);
+    const imageT = Math.min(1, Math.max(0, (tt - cue.start) / Math.max(1e-6, cue.end - cue.start)));
+    return { img, imageT };
   }
 
   /**
@@ -254,13 +347,55 @@ export class Renderer {
    * Grading each shot and then dissolving between the graded shots is both the
    * correct order and the cheaper mistake to make: it costs one extra post chain
    * while a transition is running, and nothing the rest of the time.
+   *
+   * A project image belongs to this chain for the same reason. It goes in right
+   * after the scene draws and before the grade, so the photo is pixelated by the
+   * scene's pixelate and bent by its CRT, and it arrives and leaves through the
+   * scene's own transition. Composited after all that it reads as a sticker.
    */
   renderSceneWithPost(scene, t, target) {
-    const state = this.baseState(t, scene);
+    // The cue is bound for every pass in this chain, not just the imagelayer -
+    // any effect that samples a texture may sample the picture, so a scene
+    // effect or a post pass that declares it uses one simply gets it.
+    const cue = this.imageCue(scene, t);
+    const bound = cue ? this.imageTextures(cue, scene, t) : null;
+    const withImage = bound
+      ? { image: bound.img.tex, imageAspect: bound.img.aspect, hasImage: 1 }
+      : {};
+
+    // Always set, never left over: the modulation object is reused frame to
+    // frame, so a scene with no cue would otherwise inherit the last one's clock.
+    const state = this.baseState(t, scene, { imageT: bound ? bound.imageT : 0 });
+
     const params = evalParams(this.compiled.get(`s${scene.index}`) ?? {}, state.mod);
-    this.drawEffect(scene.effectId, target, state, params, this.textures());
+    this.drawEffect(scene.effectId, target, state, params, this.textures(withImage));
 
     let current = target;
+
+    // "effect" placement means the scene is drawing the picture itself, so there
+    // is nothing to composite - laying it behind or over as well would put the
+    // same image on screen twice.
+    if (bound && cue.placement !== 'effect') {
+      const iState = { ...state };
+      const opacityFn = this.compiled.get(`imga${cue.index}`)?.__opacity;
+      iState.amount = Math.max(0, Math.min(1, opacityFn ? opacityFn(state.mod) : 0.6));
+      iState.blendMode = Math.max(0, BLEND_MODES.indexOf(cue.blend ?? 'screen'));
+
+      if (iState.amount > 0.002 && this.registry.instances.get('imagelayer')) {
+        const iParams = evalParams(this.compiled.get(`img${cue.index}`) ?? {}, state.mod);
+        // Placement and treatment are properties of the cue rather than
+        // expressions over the music, so the shader is told about them here
+        // instead of through params. Named in the storyboard, indices in GLSL.
+        iParams.behind = cue.placement === 'behind' ? 1 : 0;
+        iParams.treatment = Math.max(0, IMAGE_TREATMENTS.indexOf(cue.treatment));
+
+        this.drawEffect('imagelayer', this.post.write, iState, iParams,
+          this.textures({ ...withImage, prev: current.texture }));
+        this.post.swap();
+        current = this.post.read;
+      }
+    }
+
     for (let i = 0; i < (scene.post ?? []).length; i++) {
       const p = scene.post[i];
       if (!this.registry.instances.get(p.effectId)) continue;
@@ -270,7 +405,7 @@ export class Renderer {
       const pParams = evalParams(this.compiled.get(`s${scene.index}p${i}`) ?? {}, state.mod);
 
       this.drawEffect(p.effectId, this.post.write, pState, pParams,
-        this.textures({ prev: current.texture }));
+        this.textures({ ...withImage, prev: current.texture }));
       this.post.swap();
       current = this.post.read;
     }
@@ -526,6 +661,8 @@ export class Renderer {
       v.el.src = '';
     }
     this.videos.clear();
+    for (const img of this.images.values()) this.gl.deleteTexture(img.tex);
+    this.images.clear();
   }
 }
 

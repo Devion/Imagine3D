@@ -194,6 +194,7 @@ app.MapPut("/api/projects/{name}/settings", (ProjectStore store, string name, Pr
     current.LyricAlignment = incoming.LyricAlignment;
     current.WhisperModel = incoming.WhisperModel;
     current.Ltx = incoming.Ltx;
+    current.Images = incoming.Images ?? current.Images;
     // Aspect drives resolution, so clear any stale explicit size.
     current.Width = 0;
     current.Height = 0;
@@ -213,6 +214,61 @@ app.MapPost("/api/projects/{name}/import", (ProjectStore store, string name, Imp
             mp3 = Path.GetFileName(mp3),
             txt = txt is null ? null : Path.GetFileName(txt),
         }, Json.Options);
+    }
+    catch (Exception e) { return Results.BadRequest(new { error = e.Message }); }
+});
+
+// ---------------------------------------------------------------- images
+//
+// A project's images are an input like the MP3, not something a stage produces:
+// they are copied in, listed, and removed, and nothing downstream ever writes
+// here. The director decides where they appear; see ImageDirector.
+
+app.MapGet("/api/projects/{name}/images", (ProjectStore store, string name) =>
+{
+    try
+    {
+        var paths = store.Open(name);
+        // Both segments escaped: project names carry spaces routinely and there is
+        // nothing stopping one carrying a '#', which would silently truncate the URL.
+        var media = $"/media/{Uri.EscapeDataString(paths.Name)}/images";
+        var list = paths.ListImages().Select(f =>
+        {
+            var info = new FileInfo(Path.Combine(paths.ImagesDir, f));
+            return new
+            {
+                file = f,
+                url = $"{media}/{Uri.EscapeDataString(f)}",
+                bytes = info.Length,
+                modified = info.LastWriteTime,
+            };
+        });
+        return Results.Json(list, Json.Options);
+    }
+    catch (Exception e) { return Results.NotFound(new { error = e.Message }); }
+});
+
+// One path or twenty, and a directory contributes everything in it - the batch
+// case is this one with more entries rather than a second endpoint.
+app.MapPost("/api/projects/{name}/images", (ProjectStore store, string name, AddImagesRequest req) =>
+{
+    try
+    {
+        var paths = store.Open(name);
+        var sources = (req.Paths ?? []).Concat(req.Path is null ? [] : new[] { req.Path });
+        var added = store.ImportImages(paths, sources);
+        return Results.Json(new { added, total = paths.ListImages().Count }, Json.Options);
+    }
+    catch (Exception e) { return Results.BadRequest(new { error = e.Message }); }
+});
+
+app.MapDelete("/api/projects/{name}/images/{file}", (ProjectStore store, string name, string file) =>
+{
+    try
+    {
+        var paths = store.Open(name);
+        store.DeleteImage(paths, file);
+        return Results.Json(new { total = paths.ListImages().Count }, Json.Options);
     }
     catch (Exception e) { return Results.BadRequest(new { error = e.Message }); }
 });
@@ -285,6 +341,7 @@ app.MapPut("/api/projects/{name}/storyboard/scene/{index:int}",
 
     var scene = storyboard.Scenes[index];
     var wanted = req.EffectId?.Trim() ?? "";
+    var projectImages = paths.ListImages();
 
     StoryScene edited;
     if (wanted.Length == 0)
@@ -302,6 +359,14 @@ app.MapPut("/api/projects/{name}/storyboard/scene/{index:int}",
             return Results.BadRequest(new { error = $"\"{effect.Id}\" is a {effect.Kind}, not a scene." });
         if (!effect.SupportsAspect(storyboard.Aspect))
             return Results.BadRequest(new { error = $"\"{effect.Id}\" does not support {storyboard.Aspect}." });
+        // An image effect with no image renders a stand-in pattern. Say so here
+        // rather than letting the scene quietly become that.
+        if (effect.UsesImage && projectImages.Count == 0)
+            return Results.BadRequest(new
+            {
+                error = $"\"{effect.Id}\" draws one of the project's images, and this project has none. " +
+                        "Add some under Images first.",
+            });
 
         edited = scene with
         {
@@ -318,7 +383,15 @@ app.MapPut("/api/projects/{name}/storyboard/scene/{index:int}",
 
     var scenes = storyboard.Scenes.ToArray();
     scenes[index] = edited;
-    var updated = storyboard with { Scenes = scenes };
+
+    // What the shot needs from a picture changed with the effect: one that draws
+    // the image itself has to be given one, and one that does not has to have it
+    // composited instead. Left alone, either mistake only shows up in the render.
+    var images = ImageDirector.Resync(
+        storyboard.Images ?? [], scenes, index, registry.Current,
+        projectImages, store.Load(paths), storyboard.Seed);
+
+    var updated = storyboard with { Scenes = scenes, Images = images };
 
     File.WriteAllText(paths.StoryboardFile, JsonSerializer.Serialize(updated, Json.Indented));
     return Results.Json(edited, Json.Options);
@@ -530,24 +603,54 @@ void RunWindow()
             // The only thing the native side is needed for is the file picker - a
             // browser cannot hand us a real path, and import needs one to copy from.
             var self = (PhotinoWindow)sender!;
+            string cmd = "";
             try
             {
                 using var doc = JsonDocument.Parse(message);
-                if (doc.RootElement.GetProperty("cmd").GetString() != "pickMp3") return;
+                cmd = doc.RootElement.GetProperty("cmd").GetString() ?? "";
 
-                var picked = self.ShowOpenFile("Select an MP3", multiSelect: false,
-                    filters: [("Audio", ["mp3"])]);
-
-                self.SendWebMessage(JsonSerializer.Serialize(new
+                switch (cmd)
                 {
-                    cmd = "pickedMp3",
-                    path = picked is { Length: > 0 } ? picked[0] : null,
-                }, Json.Options));
+                    case "pickMp3":
+                    {
+                        var picked = self.ShowOpenFile("Select an MP3", multiSelect: false,
+                            filters: [("Audio", ["mp3"])]);
+
+                        self.SendWebMessage(JsonSerializer.Serialize(new
+                        {
+                            cmd = "pickedMp3",
+                            path = picked is { Length: > 0 } ? picked[0] : null,
+                        }, Json.Options));
+                        break;
+                    }
+
+                    // Batch by default. Adding images one at a time is the same
+                    // dialog with the multi-select turned off, and nobody wants
+                    // that dialog eleven times.
+                    case "pickImages":
+                    {
+                        bool multi = !doc.RootElement.TryGetProperty("multi", out var m) || m.GetBoolean();
+                        var exts = ProjectPaths.ImageExtensions.Select(e => e.TrimStart('.')).ToArray();
+                        var picked = self.ShowOpenFile(
+                            multi ? "Select images" : "Select an image",
+                            multiSelect: multi, filters: [("Images", exts)]);
+
+                        self.SendWebMessage(JsonSerializer.Serialize(new
+                        {
+                            cmd = "pickedImages",
+                            paths = picked ?? [],
+                        }, Json.Options));
+                        break;
+                    }
+                }
             }
             catch (Exception e)
             {
-                self.SendWebMessage(JsonSerializer.Serialize(
-                    new { cmd = "pickedMp3", error = e.Message }, Json.Options));
+                self.SendWebMessage(JsonSerializer.Serialize(new
+                {
+                    cmd = cmd == "pickImages" ? "pickedImages" : "pickedMp3",
+                    error = e.Message,
+                }, Json.Options));
             }
         })
         .Load(url);
@@ -569,6 +672,8 @@ record ClientLog(string Level, string Message, string? Stack);
 record SceneEditRequest(string? EffectId);
 record CreateRequest(string Name);
 record ImportRequest(string Path);
+/// Either form is accepted: one path, a list of them, or a folder in either.
+record AddImagesRequest(string[]? Paths = null, string? Path = null);
 record GenerateRequest(
     bool UseLlm = true,
     bool GenerateLtx = false,

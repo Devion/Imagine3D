@@ -5,9 +5,10 @@ scene, effect and transition from the audio and the lyrics — you supply the so
 
 - **.NET 10** backend, **Photino** desktop window, **WebGL2** render engine.
 - Audio analysis (BPM, beats, bars, sections, six-band VU) is written in C#, no Python.
-- **90 effects**, each one folder. Adding one needs no code changes anywhere else.
+- **93 effects**, each one folder. Adding one needs no code changes anywhere else.
 - Lyrics are timed against the actual vocal by Whisper forced alignment.
 - Scenes **blend** as well as cut — 15 transitions plus sustained layering.
+- Drop your own **images** into a project and the director casts them into it.
 - Renders **1080p at ~50–68 fps** on an RTX 5090 — a 5:42 song encodes in about 3 minutes.
 - Optional AI video inserts (LTX via ComfyUI) blended in with screen/multiply/XOR.
 
@@ -244,6 +245,7 @@ is ever PNG-encoded or written to disk mid-render.
 projects/<Name>/
   project.json          aspect, fps, seed, encoder, LTX settings
   source/song.mp3       the imported source (+ song.txt if supplied)
+  images/*.jpg          your own pictures, if you want any in it
   analysis/analysis.json   bpm, beats, downbeats, sections, rms, bands
   plan/intent.json         what the LLM understood the song to be about
   plan/storyboard.json     the resolved effect timeline — editable
@@ -259,6 +261,60 @@ Negative: text, watermark               # things to avoid
 [Whispered vocal]                       # section markers map to detected boundaries
 Do not speak my hidden name             # lyric lines become on-screen text
 ```
+
+---
+
+## Your own images
+
+Drop pictures into a project — **Add images…** in the sidebar takes as many as you
+like at once, or point it at a folder — and the director casts them into the video
+the same way it casts effects. They land in `images/` and nothing downstream ever
+writes there.
+
+```
+POST /api/projects/<name>/images   {"paths": ["D:\\photos", "D:\\shot.jpg"]}
+```
+
+Three ways a picture can be in a shot, and they are answers to different
+questions about the frame the effect has already drawn:
+
+| placement | when | what it is |
+|---|---|---|
+| `behind` | the scene's `coverage` is ≤ 0.55 | the photo is the backdrop, keyed by the scene's own luminance |
+| `over` | the frame is already full | a few seconds of interference through screen/multiply/difference/XOR |
+| `effect` | the scene's effect draws pictures itself | the image is handed to the shader; nothing is composited |
+
+`behind` is the one worth understanding. These shaders draw on black, so what an
+effect lights up *is* its alpha: the picture is dimmed by the scene's luminance
+and the scene added back over it, which reads as the demo glowing in front of a
+photograph rather than as a hole cut out of one. That is also why coverage
+decides the placement — put an image behind a full-frame shader and it is simply
+never seen.
+
+The image goes in **before the scene's post stack**, not after the transition the
+way an LTX clip does. It is pixelated by that scene's pixelate, bent by its CRT,
+and it arrives and leaves through the scene's own edit. Composited after all that
+it reads as a sticker. Every picture is also pulled some way towards the run's
+palette, which is what stops a photograph looking like a screenshot pasted into a
+demo.
+
+**Uniqueness first.** The images are dealt from a shuffled reel, so every one
+appears before any appears twice, and a reshuffle can never deal the same picture
+twice running. *How often* sets what share of scenes may carry one; where they go
+is decided by how much room the shot has — low coverage, a long scene, and a
+still or sideways-travelling picture all argue for it — and no two neighbouring
+scenes ever both carry one. With fewer images than slots, `maxUsesPerImage`
+(3 by default) caps the count rather than repeating one picture into wallpaper.
+
+Cues are placed **when the plan is made**, so images added to a project that
+already has a storyboard need a **Redo storyboard** before they are in it. The
+panel says so rather than leaving a folder that silently does nothing. Each cue
+is a plain entry in `storyboard.json` with its own opacity and parameter
+expressions, so it can be hand-edited and re-rendered like everything else.
+
+An effect can also draw the picture itself rather than have it composited —
+`imagerotozoom` and `imageshatter` do — and those are simply not offered to a
+project with no images, because an image effect with no image is a black frame.
 
 ---
 
@@ -311,6 +367,7 @@ without containing any sync code:
 | `sub bass lowMid mid high air` | the six band followers |
 | `rmsPeak` `subPeak` … `airPeak` | the same, held at their recent maximum then falling — a meter's peak indicator |
 | `t` `sceneT` `sectionT` | seconds, progress through scene/section |
+| `imageT` | 0..1 through the image cue running on this scene, if any |
 
 Functions: `sin cos abs min max clamp mix smoothstep step pow sqrt floor fract mod noise`.
 
@@ -336,11 +393,23 @@ Shared GLSL is available via `#include`:
 #include "blend.glsl"    // blendMode() incl. multiply, screen, difference, XOR
 #include "sdf.glsl"      // primitives, raymarch(), softShadow(), AO
 #include "panel.glsl"    // 2D shapes, pixel-unit fill()/stroke(), spectrumNow()
+#include "image.glsl"    // imageUv() cover-fit, imageSample(), imageTone()
 ```
 
 `kind` is one of `scene2d`, `raymarch`, `scene3d`, `post`, `transition`.
 Set `"module": true` and supply `effect.js` instead when the effect needs real
 geometry (see `meshshowcase`, `meshflyby`).
+
+**Using a project image.** `uImage` is in the preamble like every other uniform,
+so any effect that can sample a texture can sample a picture — it is bound for
+every pass of a scene that has a cue, the scene shader and its post stack alike.
+Declaring `"usesImage": true` is how an effect says it *needs* one rather than
+merely being handed one, and it buys two things: the director will not pick the
+effect for a project with no images, and a scene that gets it is given a cue
+whether or not the density asked for one. Use `image.glsl` rather than sampling
+`uImage` directly — cover-fitting, the beat ripple and the palette tone are three
+things that have to be right every time — and respect `uHasImage`, or the effect
+draws a black frame on the contact sheet, in the gallery and on the probe.
 
 **Keep `tags` honest.** The director normalises tag overlap by how many tags an
 effect declares, because raw overlap rewards breadth — an effect tagged with
@@ -396,8 +465,11 @@ in sync with what you are hearing, because both read `audio.currentTime`. With n
 project selected it falls back to a plain 124 BPM metronome and says so.
 
 Transitions sweep their wipe on a loop rather than sitting at one frozen slice,
-and post effects are shown over a test image, so all 90 effects are legible and
-not just the scenes. Deep links work: `preview.html?kind=raymarch&play=tunnel&t=42`.
+post effects are shown over a test image, and effects that draw one of the
+project's images are given that project's first picture — with a stand-in when it
+has none, because "what does this effect do" is a different question with a
+photograph in it than with a test pattern. So all 93 effects are legible and not
+just the scenes. Deep links work: `preview.html?kind=raymarch&play=tunnel&t=42`.
 
 One WebGL context serves the whole page — ninety is past what a browser will
 give you, and would be ninety copies of every compiled shader. Cards that are

@@ -296,7 +296,14 @@ static class Program
         var registry = EffectRegistry.Load(webRoot);
         var director = new Director(registry);
         var sceneKinds = new[] { "scene2d", "scene3d", "raymarch" };
-        var library = registry.OfKind(sceneKinds).Select(e => e.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // Effects that draw one of the project's images are not eligible here: this
+        // report plans from analysis.json alone, with no image library, and the
+        // director correctly refuses to pick them. Counting them would list two
+        // effects as "never picked" forever, which is a diagnostic saying something
+        // is wrong about a thing that is right.
+        var library = registry.OfKind(sceneKinds)
+            .Where(e => !e.UsesImage)
+            .Select(e => e.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var json = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
 

@@ -1,0 +1,25 @@
+{
+  "id": "imagerotozoom",
+  "name": "Image rotozoomer",
+  "kind": "scene2d",
+  "tags": ["amiga", "retro", "geometric", "showcase"],
+  "energyRange": [0.2, 0.85],
+  "coverage": 0.78,
+  "aspects": ["16:9", "9:16"],
+  "motion": "planar",
+  "focus": "spread",
+  "cost": "low",
+  "rarity": 0.9,
+  "usesImage": true,
+  "description": "The 1990 rotozoomer, over one of the project's own images instead of a generated tile. Mirrored at the tile edges so a photograph repeats without a seam, zoom snapping on the beat.",
+  "shader": "shader.frag",
+  "params": {
+    "zoom":  { "type": "float", "default": "1.15 - 0.35*beatPulse", "min": 0.1, "max": 8 },
+    "spin":  { "type": "float", "default": "0.18 + 0.35*energy", "min": -3, "max": 3 },
+    "tiles": { "type": "float", "default": "1.2", "min": 0.5, "max": 8,
+               "description": "How many copies of the picture across the frame. A photograph wants barely more than one - past about 3 it stops being a picture of anything and becomes wallpaper." },
+    "drift": { "type": "float", "default": "0.12", "min": 0, "max": 2 },
+    "tone":  { "type": "float", "default": "0.28 + 0.12*rms", "min": 0, "max": 1,
+               "description": "How far the picture is pulled into the run's palette." }
+  }
+}

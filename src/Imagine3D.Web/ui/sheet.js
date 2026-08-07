@@ -131,6 +131,9 @@ export async function renderContactSheet({ kind = 'all', palette = 'neon', onSta
       inst.render(state, params, {
         prev: prevTex, next: nextTex, feedback: prevTex,
         video: nextTex, text: textTex, videoAmount: 1,
+        // Effects that draw one of the project's images get the same stand-in
+        // the transitions do, so they appear on the sheet rather than as black.
+        image: nextTex, imageAspect: CELL_W / CELL_H, hasImage: 1,
       }, quad);
 
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);

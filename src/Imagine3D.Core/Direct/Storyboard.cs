@@ -17,7 +17,10 @@ public sealed record Storyboard(
     string Notes,
     StoryScene[] Scenes,
     TextCue[] Texts,
-    LtxInsert[] Ltx)
+    LtxInsert[] Ltx,
+    /// Project images placed into the picture. Null in a plan written before the
+    /// project had any, which is a plan with no images rather than a broken one.
+    ImageCue[]? Images = null)
 {
     public const int CurrentVersion = 1;
 
@@ -110,6 +113,43 @@ public sealed record TextCue(
     double End,
     string Text,
     string Style);
+
+/// One of the project's images, placed into a scene.
+///
+/// The pass runs between the scene and that scene's own post stack, not after
+/// the transition the way an LTX insert does. An image is part of the picture
+/// rather than something laid over the finished frame: it is pixelated by the
+/// scene's pixelate, bent by its CRT, and it arrives and leaves through the same
+/// transition the scene does. Composited afterwards it reads as a sticker.
+public sealed record ImageCue(
+    int Index,
+    /// The scene this belongs to. An image is a property of a shot, so a cue can
+    /// never outlive the scene that owns it or bleed into the next one.
+    int SceneIndex,
+    double Start,
+    double End,
+    string File,
+    /// "behind" keys the image in underneath the scene, using the scene's own
+    /// luminance as its alpha - these effects draw on black, so what they light
+    /// up is exactly what should sit in front of the photo. "over" composites it
+    /// on top with `Blend`, which is interference rather than a backdrop.
+    /// "effect" means the scene's own shader is drawing the picture.
+    string Placement,
+    /// What is being done to the picture while it is on screen - ripple, wave,
+    /// swirl, kaleido, tunnel, slice, mosaic, bulge. See IMAGE_TREATMENTS in
+    /// engine/renderer.js and imageWarp() in shaders/image.glsl.
+    ///
+    /// Never absent. A photograph that is only faded in and out is a photograph
+    /// pasted into the video, and it goes stale in about two seconds.
+    string Treatment,
+    /// Blend operator for "over"; ignored by "behind". See BLEND_MODES.
+    string Blend,
+    /// Mix expression, 0..1. `imageT` runs 0..1 across the cue, so this is also
+    /// where the fade in and out lives.
+    string Opacity,
+    /// Expressions for the imagelayer pass - zoom, drift, warp, tone, key.
+    Dictionary<string, string> Params,
+    string Why);
 
 /// An LTX clip mixed into the demo. `Blend` is the shader blend mode - this is
 /// where MUL/XOR/screen live.

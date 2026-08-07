@@ -25,6 +25,7 @@ const state = {
   analysis: null,
   storyboard: null,
   effects: [],
+  images: [],
   running: false,
   // A manual shortened copy reports over the same channel as a generation, but
   // it is not a generation - it has no chain to light up.
@@ -210,6 +211,7 @@ async function selectProject(name) {
   $('view-project').classList.remove('hidden');
   resetStages();
   await refreshProject();
+  await loadImages();
   await loadAnalysis();
   await loadStoryboard();
   showResult();
@@ -257,6 +259,62 @@ function applySettings(s) {
   $('ltx-count').value = String(s.ltx?.maxInserts ?? 6);
   $('ltx-init').value = s.ltx?.initMode ?? 'render';
   $('ltx-enhance').checked = !!s.ltx?.promptEnhance;
+  $('images-enabled').checked = s.images?.enabled !== false;
+  $('images-density').value = String(Math.round((s.images?.density ?? 0.4) * 100));
+  $('images-density-out').textContent = `${$('images-density').value}%`;
+}
+
+// ------------------------------------------------------------------ images
+
+async function loadImages() {
+  try { state.images = (await api(`api/projects/${encodeURIComponent(state.project)}/images`)) ?? []; }
+  catch { state.images = []; }
+  renderImages();
+}
+
+/// The grid, plus how many scenes of the plan on screen each picture carries.
+///
+/// The use count is the whole point of showing them here: the director prefers a
+/// fresh image to a repeated one, and this is where you can see whether it had
+/// enough of them to do that.
+function renderImages() {
+  const cues = state.storyboard?.images ?? [];
+  const usesOf = (file) => cues.filter((c) => c.file === file).length;
+
+  $('image-grid').innerHTML = state.images.map((img) => {
+    const n = usesOf(img.file);
+    return `<div class="shot" title="${escapeHtml(img.file)}">
+        <img src="${escapeHtml(img.url)}" alt="${escapeHtml(img.file)}" loading="lazy">
+        <span class="uses${n ? ' on' : ''}">${n ? `${n}×` : 'unused'}</span>
+        <button class="drop" data-file="${escapeHtml(img.file)}" title="Remove from the project">✕</button>
+      </div>`;
+  }).join('');
+
+  const total = state.images.length;
+  const placed = cues.length;
+
+  $('image-status').textContent =
+    total === 0 ? 'None yet — the video is made from the music alone.'
+    : !$('images-enabled').checked ? `${total} on disk, not being used.`
+    // The director places images when it plans, so images added since then are
+    // not in the video yet. Saying so beats a folder that silently does nothing.
+    : !state.storyboard ? `${total} image${total === 1 ? '' : 's'} — analyse the song to place them.`
+    : placed === 0 ? `${total} image${total === 1 ? '' : 's'}, none in this plan — press Redo storyboard.`
+    : `${placed} hit${placed === 1 ? '' : 's'} across ${
+        new Set(cues.map((c) => c.sceneIndex)).size} scenes, ${
+        new Set(cues.map((c) => c.file)).size} of ${total} used.`;
+}
+
+async function addImages(paths) {
+  const list = (paths ?? []).map((p) => String(p).trim()).filter(Boolean);
+  if (!list.length) return;
+  try {
+    const res = await api(`api/projects/${encodeURIComponent(state.project)}/images`,
+      { method: 'POST', body: JSON.stringify({ paths: list }) });
+    hideWarnings();
+    await loadImages();
+    if (res?.added?.length) $('image-path').value = '';
+  } catch (e) { showWarnings([e.message], true); }
 }
 
 /// Effects are discovered by scanning folders, so the list is whatever is on disk
@@ -317,6 +375,11 @@ function collectSettings() {
       promptEnhance: $('ltx-enhance').checked,
       comfyUrl: state.detail?.settings?.ltx?.comfyUrl ?? 'http://127.0.0.1:8188',
       comfyRoot: state.detail?.settings?.ltx?.comfyRoot ?? 'D:\\AI\\ComfyUI\\ComfyUI',
+    },
+    images: {
+      enabled: $('images-enabled').checked,
+      density: (parseInt($('images-density').value, 10) || 0) / 100,
+      maxUsesPerImage: state.detail?.settings?.images?.maxUsesPerImage ?? 3,
     },
   };
 }
@@ -439,6 +502,8 @@ async function loadStoryboard() {
     state.storyboard = null;
     $('storyboard-panel').classList.add('hidden');
   }
+  // The use counts under the thumbnails are counts of *this* plan's cues.
+  renderImages();
   // "Render this storyboard" is gated on there being one. This runs after the other
   // loaders, so without it the button reflects whichever project was open before.
   setRunButtons(!state.running);
@@ -459,7 +524,14 @@ function renderStoryboard(sb) {
     // The whole point of showing the list before rendering: this is the video.
     ' · Generate renders exactly this';
 
-  $('storyboard').innerHTML = sb.scenes.map((s) => `
+  // A scene can carry several hits, each its own picture and treatment - that is
+  // the difference between a mix and a slideshow, so the row has to show all of
+  // them rather than the first.
+  const cuesFor = (index) => (sb.images ?? []).filter((c) => c.sceneIndex === index);
+
+  $('storyboard').innerHTML = sb.scenes.map((s) => {
+    const cues = cuesFor(s.index);
+    return `
     <div class="scene${s.locked ? ' locked' : ''}" data-index="${s.index}">
       <div class="idx">${s.index + 1}</div>
       <div class="time">${fmtTime(s.start)}–${fmtTime(s.end)}</div>
@@ -471,12 +543,16 @@ function renderStoryboard(sb) {
         <span class="meta"> — ${escapeHtml(s.why)} · in via ${escapeHtml(s.transitionIn)}</span>
         <div class="chips">
           ${s.post.map((p) => `<span class="chip">${escapeHtml(p.effectId)}</span>`).join('')}
+          ${cues.map((c) => `<span class="chip" title="${escapeHtml(c.why)}">🖼 ${
+            escapeHtml(c.file)} · ${escapeHtml(c.placement === 'effect' ? 'drawn' : c.treatment)} · ${
+            (c.end - c.start).toFixed(1)}s</span>`).join('')}
           <span class="chip">energy ${s.energy.toFixed(2)}</span>
           <span class="chip">${escapeHtml(s.sectionLabel)}</span>
         </div>
         <div class="scene-shot" data-index="${s.index}"></div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   $('storyboard').scrollTop = scroll;
 
@@ -531,14 +607,15 @@ function sceneOptions(sb, scene) {
 /// remembered as a hand pick so a later re-plan keeps it too.
 async function replaceEffect(index, effectId) {
   try {
-    const scene = await api(
+    await api(
       `api/projects/${encodeURIComponent(state.project)}/storyboard/scene/${index}`,
       { method: 'PUT', body: JSON.stringify({ effectId }) });
 
-    if (state.storyboard) {
-      state.storyboard.scenes[index] = scene;
-      renderStoryboard(state.storyboard);
-    }
+    // Re-read rather than patching the one row: swapping the effect can also move
+    // an image cue - an effect that draws one has to be given one, an effect that
+    // does not has to have it composited instead - and a locally patched row would
+    // show the scene without the picture that is now in it.
+    await loadStoryboard();
     hideWarnings();
   } catch (e) {
     showWarnings([`Could not change scene ${index + 1}: ${e.message}`], true);
@@ -637,13 +714,50 @@ async function importMp3(path) {
   } catch (e) { showWarnings([e.message], true); }
 }
 
+// Add images. The native picker hands back real paths and multi-selects, which is
+// the batch case; in browser mode there is no bridge, so paths get typed instead -
+// one per line, and a folder counts as all the images in it.
+for (const [id, multi] of [['btn-add-images', true], ['btn-add-image', false]]) {
+  $(id).addEventListener('click', () => {
+    if (window.external?.sendMessage) {
+      window.external.sendMessage(JSON.stringify({ cmd: 'pickImages', multi }));
+    } else {
+      $('image-fallback').classList.toggle('hidden');
+      $('image-path').focus();
+    }
+  });
+}
+
+$('btn-add-image-path').addEventListener('click', () =>
+  addImages($('image-path').value.split(/[\r\n]+/)));
+
+$('image-grid').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.drop');
+  if (!btn) return;
+  const file = btn.dataset.file;
+  if (!confirm(`Remove ${file} from this project?`)) return;
+  try {
+    await api(`api/projects/${encodeURIComponent(state.project)}/images/${
+      encodeURIComponent(file)}`, { method: 'DELETE' });
+    await loadImages();
+  } catch (err) { showWarnings([err.message], true); }
+});
+
+$('images-density').addEventListener('input', () => {
+  $('images-density-out').textContent = `${$('images-density').value}%`;
+});
+
+for (const id of ['images-enabled', 'images-density']) {
+  $(id).addEventListener('change', () => { renderImages(); saveSettingsSoon(); });
+}
+
 if (window.external?.receiveMessage) {
   window.external.receiveMessage((raw) => {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
-    if (msg.cmd !== 'pickedMp3') return;
     if (msg.error) { showWarnings([msg.error], true); return; }
-    if (msg.path) importMp3(msg.path);
+    if (msg.cmd === 'pickedMp3' && msg.path) importMp3(msg.path);
+    if (msg.cmd === 'pickedImages' && msg.paths?.length) addImages(msg.paths);
   });
 }
 

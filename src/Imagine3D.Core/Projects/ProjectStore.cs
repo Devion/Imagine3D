@@ -129,4 +129,84 @@ public sealed class ProjectStore(string projectsRoot)
 
         return (mp3, txt);
     }
+
+    /// Copy images into the project. Returns the names as they landed on disk.
+    ///
+    /// A directory in `sources` contributes every image inside it, which is what
+    /// makes adding a folder the same operation as adding a file - the batch case
+    /// is not a second code path, it is this one with more entries.
+    ///
+    /// Unlike the MP3 there is no "one per project" rule: images accumulate, and
+    /// a name that is already taken is kept rather than overwritten. Two different
+    /// pictures both called `cover.jpg` are two pictures.
+    public IReadOnlyList<string> ImportImages(ProjectPaths p, IEnumerable<string> sources)
+    {
+        p.EnsureCreated();
+
+        var added = new List<string>();
+        var missing = new List<string>();
+
+        foreach (var raw in sources ?? [])
+        {
+            var src = (raw ?? "").Trim().Trim('"');
+            if (src.Length == 0) continue;
+
+            if (Directory.Exists(src))
+            {
+                foreach (var f in Directory.EnumerateFiles(src)
+                                           .Where(ProjectPaths.IsImage)
+                                           .OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
+                    added.Add(CopyImage(p, f));
+                continue;
+            }
+
+            if (!File.Exists(src)) { missing.Add(src); continue; }
+            if (!ProjectPaths.IsImage(src))
+                throw new InvalidOperationException(
+                    $"{Path.GetFileName(src)} is not an image " +
+                    $"({string.Join(", ", ProjectPaths.ImageExtensions)}).");
+
+            added.Add(CopyImage(p, src));
+        }
+
+        // Only a complete miss is an error: in a batch, one bad path should not
+        // throw away the twenty files that were found.
+        if (added.Count == 0)
+            throw new FileNotFoundException(missing.Count > 0
+                ? $"No images found at: {string.Join(", ", missing)}"
+                : "No images to add.");
+
+        return added;
+    }
+
+    static string CopyImage(ProjectPaths p, string source)
+    {
+        var name = UniqueName(p.ImagesDir, Path.GetFileName(source));
+        File.Copy(source, Path.Combine(p.ImagesDir, name));
+        return name;
+    }
+
+    /// `cat.jpg`, then `cat-2.jpg`, `cat-3.jpg`. Never overwrites.
+    static string UniqueName(string dir, string wanted)
+    {
+        var name = ProjectPaths.Sanitize(wanted);
+        var stem = Path.GetFileNameWithoutExtension(name);
+        var ext = Path.GetExtension(name);
+
+        for (int n = 2; File.Exists(Path.Combine(dir, name)); n++)
+            name = $"{stem}-{n}{ext}";
+
+        return name;
+    }
+
+    /// Remove one image. The plan may still name it; the renderer warns and skips
+    /// rather than failing, the same as it does for an effect that has gone.
+    public void DeleteImage(ProjectPaths p, string file)
+    {
+        var name = Path.GetFileName(file);           // a path in `file` is a traversal attempt
+        if (string.IsNullOrWhiteSpace(name)) return;
+
+        var full = Path.Combine(p.ImagesDir, name);
+        if (File.Exists(full)) File.Delete(full);
+    }
 }

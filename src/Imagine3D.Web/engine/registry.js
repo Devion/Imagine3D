@@ -48,7 +48,7 @@ export class FragmentEffect {
   /**
    * Draw into whatever framebuffer is currently bound.
    * `state` carries resolution/time/music uniforms; `params` is the already
-   * evaluated parameter map; `textures` supplies prev/feedback/video.
+   * evaluated parameter map; `textures` supplies prev/feedback/video/image.
    */
   render(state, params, textures, quad) {
     const gl = this.gl;
@@ -106,7 +106,12 @@ export class FragmentEffect {
     bindTexture(gl, u.uVideo, textures.video, 2);
     bindTexture(gl, u.uNext, textures.next, 3);
     bindTexture(gl, u.uText, textures.text, 4);
+    bindTexture(gl, u.uImage, textures.image ?? null, 5);
     if (u.uVideoAmount) gl.uniform1f(u.uVideoAmount, textures.videoAmount ?? 0);
+    // 1 rather than 0: a stretch by a zero aspect is a divide by zero, and an
+    // effect asking for the ratio when nothing is bound should get a square.
+    if (u.uImageAspect) gl.uniform1f(u.uImageAspect, textures.imageAspect || 1);
+    if (u.uHasImage) gl.uniform1f(u.uHasImage, textures.hasImage ?? 0);
 
     quad.draw();
   }

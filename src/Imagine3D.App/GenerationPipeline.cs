@@ -189,17 +189,28 @@ public sealed class GenerationPipeline(
             store.Save(paths, settings);
         }
 
+        // Read fresh rather than cached: images are dropped into the folder between
+        // runs, and the point of pressing Redo storyboard after adding some is that
+        // the new ones are in the plan.
+        var images = paths.ListImages();
+
         var storyboard = new Director(registry.Current)
-            .Build(analysis, settings, intent, LoadStoryboard(paths));
+            .Build(analysis, settings, intent, LoadStoryboard(paths), images);
 
         paths.EnsureCreated();
         File.WriteAllText(paths.StoryboardFile, JsonSerializer.Serialize(storyboard, Json.Indented));
 
         int held = storyboard.Scenes.Count(s => s.Locked);
+        int placed = storyboard.Images?.Length ?? 0;
         progress.Report(new StageProgress(PipelineStage.Storyboard, 1.0,
             $"{storyboard.Scenes.Length} scenes, " +
             $"{storyboard.Scenes.Sum(s => s.Post.Length)} post effects, " +
             $"{storyboard.Texts.Length} text cues - seed {settings.Seed}" +
+            (placed > 0
+                ? $" - {placed} image cue{(placed == 1 ? "" : "s")} from " +
+                  $"{storyboard.Images!.Select(i => i.File).Distinct(StringComparer.OrdinalIgnoreCase).Count()} " +
+                  $"of your {images.Count}"
+                : "") +
             (held > 0 ? $" - {held} kept from your edits" : "")));
 
         return storyboard;

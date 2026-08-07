@@ -40,7 +40,7 @@ export class Modulation {
     this.beatRef = this.measureBeatRef();
 
     this.vars = {
-      t: 0, sectionT: 0, sceneT: 0, clipT: 0,
+      t: 0, sectionT: 0, sceneT: 0, clipT: 0, imageT: 0,
       beat: 0, bar: 0, phrase: 0,
       beatPulse: 0, barPulse: 0, onset: 0, beatStrength: 0,
       rms: 0, energy: 0, index: 0, rmsPeak: 0,

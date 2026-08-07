@@ -65,6 +65,14 @@ export class Gallery {
     this.nextTex = this.gradientTexture(1);
     this.textTex = this.textTexture();
 
+    // Effects that draw one of the project's images need a picture to draw. The
+    // stand-in is there so they are legible with no project selected; picking one
+    // swaps in a real photograph from it, because "what does this effect do" is a
+    // different question with a photograph in it than with a test pattern.
+    this.stillTex = this.stillTexture();
+    this.imageTex = this.stillTex;
+    this.imageAspect = CELL_W / CELL_H;
+
     this.palette = getPalette('neon');
     this.registry = null;
     this.cards = new Map();          // id -> card
@@ -118,6 +126,41 @@ export class Gallery {
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 30px sans-serif';
     ctx.fillText(variant ? 'NEXT' : 'PREV', 16, CELL_H - 20);
+    return this.uploadCanvas(c);
+  }
+
+  /// A stand-in photograph: something with a horizon, a subject and detail at
+  /// several scales, so an effect that tiles, tears or displaces a picture shows
+  /// what it is doing to one.
+  stillTexture() {
+    const c = document.createElement('canvas');
+    c.width = CELL_W; c.height = CELL_H;
+    const ctx = c.getContext('2d');
+
+    const sky = ctx.createLinearGradient(0, 0, 0, CELL_H * 0.62);
+    sky.addColorStop(0, '#12294f');
+    sky.addColorStop(0.6, '#8a5a7a');
+    sky.addColorStop(1, '#f0a060');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, CELL_W, CELL_H * 0.62);
+
+    ctx.fillStyle = '#ffe9b0';
+    ctx.beginPath();
+    ctx.arc(CELL_W * 0.68, CELL_H * 0.46, CELL_H * 0.11, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#1a1420';
+    ctx.fillRect(0, CELL_H * 0.62, CELL_W, CELL_H * 0.38);
+    for (let i = 0; i < 9; i++) {
+      const w = 12 + ((i * 37) % 34);
+      const h = 18 + ((i * 53) % 46);
+      ctx.fillStyle = i % 2 ? '#241c2e' : '#2e2338';
+      ctx.fillRect((i * 41) % CELL_W, CELL_H * 0.62 - h, w, h);
+    }
+    ctx.fillStyle = 'rgba(255,220,160,0.75)';
+    for (let i = 0; i < 40; i++)
+      ctx.fillRect((i * 29) % CELL_W, CELL_H * 0.62 - 6 - ((i * 17) % 40), 2, 3);
+
     return this.uploadCanvas(c);
   }
 
@@ -334,6 +377,7 @@ export class Gallery {
       inst.render(state, params, {
         prev: this.prevTex, next: this.nextTex, feedback: this.prevTex,
         video: this.nextTex, text: this.textTex, videoAmount: 1,
+        image: this.imageTex, imageAspect: this.imageAspect, hasImage: 1,
       }, this.quad);
 
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -422,7 +466,10 @@ export class Gallery {
     this.detachAudio();
     this.mod = null;
     this.analysis = null;
+    this.useProjectImage(null);
     if (!name) return null;
+
+    this.useProjectImage(name);   // not awaited: the stand-in holds until it lands
 
     const detail = await (await fetch(`api/projects/${encodeURIComponent(name)}`)).json();
     if (!detail.hasAnalysis) return { name, bpm: null, audio: null };
@@ -436,6 +483,32 @@ export class Gallery {
       this.audio.currentTime = Math.min(this.clockBase, this.duration - 1);
     }
     return { name, bpm: this.analysis.bpm, audio: !!this.audio };
+  }
+
+  /// Draw the image effects against this project's first picture, or against the
+  /// stand-in when it has none. Failure is not worth reporting - the stand-in is
+  /// a perfectly good answer to "what does this effect do".
+  async useProjectImage(name) {
+    const release = () => {
+      if (this.imageTex !== this.stillTex) this.gl.deleteTexture(this.imageTex);
+      this.imageTex = this.stillTex;
+      this.imageAspect = CELL_W / CELL_H;
+    };
+
+    if (!name) { release(); return; }
+
+    try {
+      const list = await (await fetch(`api/projects/${encodeURIComponent(name)}/images`)).json();
+      if (!Array.isArray(list) || !list.length) { release(); return; }
+
+      const img = new Image();
+      img.src = list[0].url;
+      await img.decode();
+
+      release();
+      this.imageTex = this.uploadCanvas(img);
+      this.imageAspect = (img.naturalWidth || 1) / Math.max(1, img.naturalHeight);
+    } catch { release(); }
   }
 
   detachAudio() {

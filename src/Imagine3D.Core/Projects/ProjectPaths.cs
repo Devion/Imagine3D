@@ -10,6 +10,11 @@ public sealed class ProjectPaths(string root)
     public string SettingsFile => Path.Combine(Root, "project.json");
 
     public string SourceDir => Path.Combine(Root, "source");
+
+    /// Images the project supplies for the director to work with. Not derived
+    /// from anything, so nothing downstream may ever delete them.
+    public string ImagesDir => Path.Combine(Root, "images");
+
     public string AnalysisDir => Path.Combine(Root, "analysis");
     public string PlanDir => Path.Combine(Root, "plan");
     public string LtxDir => Path.Combine(Root, "ltx");
@@ -32,9 +37,32 @@ public sealed class ProjectPaths(string root)
     public void EnsureCreated()
     {
         foreach (var d in new[]
-                 { Root, SourceDir, AnalysisDir, PlanDir, LtxDir, CacheDir, KeyframeDir, OutputDir, LogDir })
+                 { Root, SourceDir, ImagesDir, AnalysisDir, PlanDir, LtxDir, CacheDir, KeyframeDir, OutputDir, LogDir })
             Directory.CreateDirectory(d);
     }
+
+    /// What counts as an image. Anything a browser can decode into a texture -
+    /// the renderer uploads these through an <img> element, so this list is
+    /// exactly the formats WebGL can be handed.
+    public static readonly string[] ImageExtensions =
+        [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".avif"];
+
+    public static bool IsImage(string path) =>
+        ImageExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
+
+    /// The project's images, by name, sorted.
+    ///
+    /// Sorted rather than in directory order because the director shuffles this
+    /// list from the project seed: a plan has to come out the same twice, and the
+    /// order the filesystem happens to enumerate in is not something to build on.
+    public IReadOnlyList<string> ListImages() =>
+        Directory.Exists(ImagesDir)
+            ? Directory.EnumerateFiles(ImagesDir)
+                .Where(IsImage)
+                .Select(f => Path.GetFileName(f))
+                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                .ToList()
+            : [];
 
     /// The imported MP3, whatever it was called originally.
     public string? FindMp3() => FirstOrNull(SourceDir, "*.mp3");

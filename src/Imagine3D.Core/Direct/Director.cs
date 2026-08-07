@@ -65,9 +65,12 @@ public sealed class Director(EffectRegistry registry)
     /// `previous` is the plan already on disk, if any. Only its hand-picked scenes are
     /// read from it - everything else is chosen fresh - so re-planning stays a re-plan
     /// rather than an edit of the last one.
+    ///
+    /// `images` is the project's own image library, by filename. Empty is the normal
+    /// case and costs nothing.
     public Storyboard Build(
         AudioAnalysis analysis, ProjectSettings settings, Intent? intent,
-        Storyboard? previous = null)
+        Storyboard? previous = null, IReadOnlyList<string>? images = null)
     {
         intent ??= Intent.Empty;
         var rng = new Random(settings.Seed);
@@ -82,8 +85,14 @@ public sealed class Director(EffectRegistry registry)
         var recentPost = new List<string>();
         var recentTransitions = new List<string>();
 
+        // An effect that draws one of the project's images has nothing to draw when
+        // the project has none - it would render black. So the library available to
+        // a project genuinely depends on what the user put in images/.
+        bool useImages = settings.Images.Enabled && (images?.Count ?? 0) > 0;
+
         var candidates = registry.OfKind(SceneKinds)
             .Where(e => e.SupportsAspect(settings.Aspect))
+            .Where(e => useImages || !e.UsesImage)
             .ToList();
 
         if (candidates.Count == 0)
@@ -125,7 +134,7 @@ public sealed class Director(EffectRegistry registry)
             else if (pinned is not null) pick = pinned;
             recent.Add(pick.Id);
 
-            var post = PickPost(pick, tags, intensity, settings.Aspect, recentPost, cast, rng);
+            var post = PickPost(pick, tags, intensity, settings.Aspect, recentPost, cast, rng, useImages);
 
             double prevEnergy = i > 0 ? sections[i - 1].Energy : 0;
             double delta = intensity - prevEnergy;
@@ -168,6 +177,20 @@ public sealed class Director(EffectRegistry registry)
         }
 
         var texts = BuildTexts(analysis, sections);
+        var built = scenes.ToArray();
+
+        // Downbeats where the grid can be trusted, beats otherwise, nothing if
+        // neither: image hits are snapped to it, which is most of what makes one
+        // read as part of the music rather than as a timer going off.
+        var grid = analysis.Downbeats.Length > 4 ? analysis.Downbeats
+                 : analysis.BpmConfidence >= 0.4 ? analysis.Beats
+                 : [];
+
+        // Its own RNG stream, for the same reason the cast has one: whether this
+        // video uses the user's photographs must not shift every scene pick that
+        // comes after it.
+        var imageCues = ImageDirector.Place(
+            images ?? [], built, registry, settings, grid, new Random(settings.Seed ^ 0x1A6E));
 
         return new Storyboard(
             Version: Storyboard.CurrentVersion,
@@ -178,9 +201,10 @@ public sealed class Director(EffectRegistry registry)
             Mood: intent.Mood,
             Palette: string.IsNullOrWhiteSpace(intent.Palette) ? DerivePalette(analysis, rng) : intent.Palette,
             Notes: intent.Story,
-            Scenes: scenes.ToArray(),
+            Scenes: built,
             Texts: texts,
-            Ltx: []); // filled in by the LTX stage when it runs
+            Ltx: [],  // filled in by the LTX stage when it runs
+            Images: imageCues);
     }
 
     /// Fold sections that are too short to register as a scene into the previous one.
@@ -470,10 +494,12 @@ public sealed class Director(EffectRegistry registry)
 
     PostEffect[] PickPost(
         EffectManifest scene, TagWeight[] tags, double energy, string aspect,
-        List<string> recent, IReadOnlyDictionary<string, double> cast, Random rng)
+        List<string> recent, IReadOnlyDictionary<string, double> cast, Random rng,
+        bool useImages)
     {
         var pool = registry.OfKind("post")
             .Where(e => e.SupportsAspect(aspect))
+            .Where(e => useImages || !e.UsesImage)
             // Utility passes - scene blending, the lyric layer, LTX compositing - are
             // plumbing the renderer drives by id. They carry a manifest so the loader
             // finds them, not so the director may decorate a scene with one.

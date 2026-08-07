@@ -57,6 +57,35 @@
         </div>
 
         <div class="panel">
+          <h2>Images</h2>
+          <div id="image-grid" class="image-grid"></div>
+          <div class="row">
+            <button id="btn-add-images" class="primary" style="flex:1"
+                    title="Add several at once — hold Ctrl in the picker, or point it at a folder">Add images…</button>
+            <button id="btn-add-image" class="ghost"
+                    title="Add a single image">One…</button>
+          </div>
+          <div id="image-fallback" class="fallback hidden">
+            <textarea id="image-path" rows="2" spellcheck="false"
+              placeholder="D:\photos\shot.jpg&#10;D:\photos  — a folder adds everything in it"></textarea>
+            <button id="btn-add-image-path" class="ghost">Add</button>
+          </div>
+          <label class="check">
+            <input id="images-enabled" type="checkbox" checked>
+            <span>Let the director use them</span>
+          </label>
+          <label class="field"><span>How often</span>
+            <input id="images-density" type="range" min="0" max="100" step="5" value="40">
+            <output id="images-density-out">40%</output>
+          </label>
+          <p id="image-status" class="hint"></p>
+          <p class="hint">Dropped into <code>images/</code>. The director puts them
+             behind sparse scenes, over busy ones, and hands them to the effects
+             built to draw one — a different picture each time while there are
+             unused ones left.</p>
+        </div>
+
+        <div class="panel">
           <h2>Output</h2>
           <label class="field">
             <span>Aspect</span>

@@ -47,6 +47,12 @@ uniform sampler2D uNext;      // transitions only: the incoming scene
 uniform sampler2D uFeedback;  // the previous frame, for trails and echo
 uniform sampler2D uVideo;     // LTX clip, when one is active
 uniform sampler2D uText;      // rendered lyric/scroller layer
+// One of the project's own images. Any effect may sample it; uHasImage says
+// whether there is anything bound, so an effect built around a picture can fall
+// back to something rather than drawing a black frame when there is none.
+uniform sampler2D uImage;
+uniform float uImageAspect;   // its width/height, for cover-fitting it to the frame
+uniform float uHasImage;      // 1 when a cue is running, 0 otherwise
 uniform float uVideoAmount;
 uniform int   uBlendMode;     // index into blendMode() in shaders/blend.glsl
 uniform float uSeed;          // per-run seed, so noise differs between videos
