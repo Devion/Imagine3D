@@ -10,14 +10,14 @@
   "description": "Runs the frame like wet ink on paper: colour is dragged down capillary veins, pools against the drying front, and creeps a little further every frame. The wet patches drift, so nothing stays soaked for long.",
   "shader": "shader.frag",
   "params": {
-    "bleed": { "type": "float", "default": "0.8 + 0.5*rms", "min": 0, "max": 2,
+    "bleed": { "type": "float", "default": "0.7 + 0.5*rms + 0.4*lowMidRel", "min": 0, "max": 2,
               "description": "How far colour is dragged along a run." },
     "wet": { "type": "float", "default": "0.85", "min": 0, "max": 1.5,
             "description": "How much of the frame is soaked at once." },
-    "drip": { "type": "float", "default": "0.5 + 0.4*bass", "min": 0, "max": 2,
+    "drip": { "type": "float", "default": "0.4 + 0.4*bass + 0.4*bassHit", "min": 0, "max": 2,
              "description": "Frame-to-frame creep — this is the part that accumulates." },
     "stain": { "type": "float", "default": "0.7", "min": 0, "max": 2,
               "description": "Darkening and tint where the ink pools against the front." },
-    "speed": { "type": "float", "default": "0.4 + 0.4*energy", "min": 0, "max": 2 }
+    "speed": { "type": "float", "default": "0.4 + 0.4*energy + 0.3*midRel", "min": 0, "max": 2 }
   }
 }

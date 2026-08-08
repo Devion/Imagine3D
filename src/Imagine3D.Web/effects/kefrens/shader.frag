@@ -57,10 +57,17 @@ void main() {
     float seed = hash11(fi * 7.31 + 3.0);
     float depth = n > 1 ? fi / float(n - 1) : 0.0;      // 0 nearest, 1 furthest
 
+    // Each bar answers its own slice of the spectrum — the near one rides the
+    // low end, the far ones the top. Eight bars all swinging on the same
+    // envelope is one bar drawn eight times; given a band each they cross at
+    // rates the mix decides, and the stack reads the arrangement apart.
+    float band = spectrumNow(depth);
+    float strike = spectrumHit(depth);
+
     float rate  = mix(1.30, 0.55, depth) * (0.85 + 0.30 * seed);
     float lag   = p_lag * mix(1.40, 0.55, depth) * (0.80 + 0.40 * seed);
-    float halfW = p_width * mix(1.55, 0.45, depth) * uAspect;
-    float amp   = p_amplitude * mix(1.00, 0.55, depth);
+    float halfW = p_width * mix(1.55, 0.45, depth) * uAspect * (0.80 + 0.45 * band);
+    float amp   = p_amplitude * mix(1.00, 0.55, depth) * (0.72 + 0.50 * band);
     float phase = seed * TAU;
 
     float t = uTime * p_speed * rate - row * lag * 110.0;
@@ -79,7 +86,8 @@ void main() {
 
     // Halo. Reaches well past the bar and is additive, so where two bars cross
     // they brighten instead of one simply covering the other.
-    glow += tint * exp(-d / (halfW * 1.8)) * 0.32 * mix(1.20, 0.45, depth);
+    glow += tint * exp(-d / (halfW * 1.8)) * 0.32 * mix(1.20, 0.45, depth)
+            * (0.70 + 0.60 * band + 0.55 * strike);
 
     if (d > halfW + aa * 2.0) continue;
 

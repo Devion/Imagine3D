@@ -16,16 +16,16 @@
               "description": "Balls around each ring." },
     "rings": { "type": "float", "default": "16.0", "min": 4, "max": 22,
               "description": "How far down the corridor the stack reaches. More rings is more depth and more cost." },
-    "radius": { "type": "float", "default": "0.30 + 0.06*beatPulse", "min": 0.05, "max": 0.9,
+    "radius": { "type": "float", "default": "0.30 + 0.05*beatPulse + 0.05*bassHit", "min": 0.05, "max": 0.9,
                "description": "Ball size in world units. Large enough that the nearest ring overruns the frame." },
-    "spread": { "type": "float", "default": "1.05 + 0.25*energy", "min": 0.3, "max": 2.5,
+    "spread": { "type": "float", "default": "1.05 + 0.25*energy + 0.15*lowMidRel", "min": 0.3, "max": 2.5,
                "description": "Ring radius. Above ~1.2 the ring passes outside the frame edges and the corridor reads as a wall of balls." },
     "speed": { "type": "float", "default": "1.1 + 1.6*energy", "min": 0, "max": 6,
               "description": "How fast the stack comes at the camera." },
-    "spin": { "type": "float", "default": "0.35 + 0.3*energy", "min": -3, "max": 3 },
+    "spin": { "type": "float", "default": "0.35 + 0.3*energy + 0.2*midRel", "min": -3, "max": 3 },
     "twist": { "type": "float", "default": "0.22", "min": 0, "max": 1.2,
               "description": "Per-ring rotation offset. Turns the stack into a corkscrew." },
-    "haze": { "type": "float", "default": "1.0", "min": 0, "max": 2,
+    "haze": { "type": "float", "default": "0.8 + 0.5*airRel", "min": 0, "max": 2,
              "description": "Glow down the throat of the corridor." }
   }
 }

@@ -12,9 +12,9 @@
   "description": "Infinite perspective checkerboard under a horizon and starfield — the ray-traced floor every 90s demo opened with.",
   "shader": "shader.frag",
   "params": {
-    "speed": { "type": "float", "default": "1.2 + 1.8*energy", "min": 0, "max": 6 },
-    "scale": { "type": "float", "default": "1.0", "min": 0.2, "max": 4 },
-    "horizon": { "type": "float", "default": "0.5 + 0.03*beatPulse", "min": 0.2, "max": 0.8 },
-    "reflect": { "type": "float", "default": "0.35", "min": 0, "max": 1 }
+    "speed": { "type": "float", "default": "1.2 + 1.8*energy + 0.6*bassRel", "min": 0, "max": 6 },
+    "scale": { "type": "float", "default": "0.85 + 0.30*lowMidRel", "min": 0.2, "max": 4 },
+    "horizon": { "type": "float", "default": "0.5 + 0.03*beatPulse + 0.02*subHit", "min": 0.2, "max": 0.8 },
+    "reflect": { "type": "float", "default": "0.25 + 0.25*airRel", "min": 0, "max": 1 }
   }
 }

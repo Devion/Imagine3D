@@ -12,10 +12,10 @@
   "description": "Low-flying pass over ridged fractal mountains with height-banded colour and horizon haze.",
   "shader": "shader.frag",
   "params": {
-    "speed": { "type": "float", "default": "0.70 + 0.80*energy", "min": 0, "max": 8 },
-    "height": { "type": "float", "default": "1.0 + 0.35*bass", "min": 0.2, "max": 3 },
+    "speed": { "type": "float", "default": "0.70 + 0.80*energy + 0.30*midRel", "min": 0, "max": 8 },
+    "height": { "type": "float", "default": "1.0 + 0.35*bass + 0.30*subRel", "min": 0.2, "max": 3 },
     "bands": { "type": "float", "default": "0.0", "min": 0, "max": 16,
               "description": "0 = smooth height colouring; >2 quantises to contour bands." },
-    "altitude": { "type": "float", "default": "1.5", "min": 0.3, "max": 5 }
+    "altitude": { "type": "float", "default": "1.35 + 0.35*lowMidRel", "min": 0.3, "max": 5 }
   }
 }

@@ -9,9 +9,9 @@
   "description": "Quantises to a small palette with ordered Bayer dithering - OCS 32-colour or AGA 4096 depending on levels. The single most effective way to make modern shaders look period-correct.",
   "shader": "shader.frag",
   "params": {
-    "levels": { "type": "float", "default": "6.0 + 2.0*energy", "min": 2, "max": 32,
+    "levels": { "type": "float", "default": "4.0 + 2.0*energy + 4.0*brightness", "min": 2, "max": 32,
                "description": "Levels per channel. 4 is roughly OCS, 16 roughly AGA." },
     "dither": { "type": "float", "default": "1.0", "min": 0, "max": 1 },
-    "saturate": { "type": "float", "default": "1.15", "min": 0, "max": 2 }
+    "saturate": { "type": "float", "default": "1.05 + 0.30*airRel", "min": 0, "max": 2 }
   }
 }

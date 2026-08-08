@@ -21,7 +21,7 @@
     "rightPeak": { "type": "float", "default": "0.26*lowMidPeak + 0.42*midPeak + 0.32*highPeak", "min": 0, "max": 1.5 },
     "tint": { "type": "float", "default": "0.35", "min": 0, "max": 1,
              "description": "Pulls the cream card, amber lamp and red zone toward the project palette. 0 leaves the classic hi-fi colours; 1 puts the whole panel in the video's colour world and loses most of what makes it read as a VU meter." },
-    "glow": { "type": "float", "default": "0.9 + 0.35*beatPulse", "min": 0, "max": 2,
+    "glow": { "type": "float", "default": "0.9 + 0.3*beatPulse + 0.3*highHit", "min": 0, "max": 2,
              "description": "Backlight behind the cards, and the haze the lit wells throw into the corridor in front of them." },
     "travel": { "type": "float", "default": "1.2 + 2.4*energy", "min": -10, "max": 10,
                "description": "How fast the camera flies down the corridor. Negative runs it backwards; 0 holds still between two walls of meters." },

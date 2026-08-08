@@ -9,7 +9,7 @@
   "description": "Radial RGB separation that grows toward the edges and kicks on transients.",
   "shader": "shader.frag",
   "params": {
-    "strength": { "type": "float", "default": "0.004 + 0.012*onset + 0.006*beatPulse", "min": 0, "max": 0.08 },
+    "strength": { "type": "float", "default": "0.004 + 0.010*highHit + 0.006*onset + 0.004*beatPulse", "min": 0, "max": 0.08 },
     "falloff": { "type": "float", "default": "1.8", "min": 0, "max": 4 }
   }
 }

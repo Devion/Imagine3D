@@ -13,8 +13,8 @@
   "shader": "shader.frag",
   "params": {
     "drops": { "type": "float", "default": "5.0", "min": 1, "max": 10 },
-    "speed": { "type": "float", "default": "1.6 + 0.8*energy", "min": 0, "max": 6 },
-    "amplitude": { "type": "float", "default": "0.5 + 0.5*bass", "min": 0, "max": 2 },
-    "caustic": { "type": "float", "default": "0.65", "min": 0, "max": 2 }
+    "speed": { "type": "float", "default": "1.6 + 0.8*energy + 0.4*midRel", "min": 0, "max": 6 },
+    "amplitude": { "type": "float", "default": "0.5 + 0.4*bass + 0.3*bassHit", "min": 0, "max": 2 },
+    "caustic": { "type": "float", "default": "0.5 + 0.4*airRel", "min": 0, "max": 2 }
   }
 }

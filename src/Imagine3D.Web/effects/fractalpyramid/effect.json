@@ -13,8 +13,8 @@
   "shader": "shader.frag",
   "params": {
     "folds": { "type": "float", "default": "8.0", "min": 2, "max": 14 },
-    "spin": { "type": "float", "default": "0.2 + 0.2*energy", "min": -2, "max": 2 },
-    "glow": { "type": "float", "default": "1.0 + 0.8*beatPulse", "min": 0.1, "max": 4 },
-    "orbit": { "type": "float", "default": "0.35", "min": -2, "max": 2 }
+    "spin": { "type": "float", "default": "0.2 + 0.2*energy + 0.2*midRel", "min": -2, "max": 2 },
+    "glow": { "type": "float", "default": "0.9 + 0.7*beatPulse + 0.6*highHit", "min": 0.1, "max": 4 },
+    "orbit": { "type": "float", "default": "0.25 + 0.25*brightness", "min": -2, "max": 2 }
   }
 }

@@ -104,6 +104,49 @@ panel, so the timing can be trusted on evidence rather than on faith. With no
 Whisper-capable Python present, it falls back to distributing lines across
 detected sections and says so.
 
+### How lyrics get drawn
+
+Ten treatments, chosen per section by `Director.BuildTexts` from what the music
+is doing there — its energy, the song's tempo, whether the beat grid is worth
+trusting, the section's own spectral tilt, and how fast its words arrive. Every
+line in a section gets the same one, because a treatment that changes line to
+line reads as a fault rather than as an idea. A line the treatment has no room
+for is downgraded to one that fits: a wipe across half a second is a flash, not a
+wipe.
+
+| | |
+|---|---|
+| `karaoke` | the whole line is up and legible; the *lit* word tracks the vocal |
+| `cascade` | one word per beat, dropped in off the tracked grid and left alone |
+| `spectrum`| each column of letters rides the band living at that part of the frame |
+| `shockwave`| a ring leaves the middle of the line on every beat and passes through it |
+| `drift` | each word bobbing on its own slow phase, swelling with the take |
+| `shatter` | slices tear sideways on a real transient and are back within a fraction of a beat |
+| `wave` `slam` `fade` `scroll` | the originals: Amiga scroller, beat punch, soft fade, marquee |
+
+Two rules bind all of them, and `effects/textcomposite/shader.frag` is written
+around them. **Readable**: motion returns to rest, letterforms are never
+permanently warped, no word is held dark long enough to be missed. **On time**:
+every one is driven by something the music is doing — a beat off the tracked
+grid, a band follower, or the singer's own position in the line — never by a
+free-running timer.
+
+What makes the per-word treatments possible is that `engine/textlayer.js` puts
+more than a mask in the text raster. The alpha channel is the glyphs; the colour
+channels carry, per word, where it sits in the line's reading order, a stable
+random of its own, and which wrapped row it is on. Reading order is measured in
+*characters*, not words, because "the" and "everything" are one word each and
+nowhere near one beat each. It costs nothing at render time — the raster is
+still drawn once per line and cached.
+
+```
+dotnet run --project src/Imagine3D.Tests -- --lyrics
+```
+
+reports which treatment every section of every analysed project draws, with the
+tempo and the cue lengths each one ends up carrying — a style whose mean line is
+under a second is being asked to do something it cannot.
+
 ### Matching the music's energy
 
 `energyRange` in a manifest is a **hard gate**, not a preference. An effect that
@@ -122,6 +165,49 @@ below 0.24. That emptiness is deliberate: it is what gives the loud sections
 somewhere to arrive from.
 
 So tag `energyRange` honestly. It is the strongest signal in the system.
+
+### The clock the effects run on
+
+`uTime` is not the song's clock. Two things are done to it in
+`engine/modulation.js`, and both exist because of the same complaint: effects
+that feel obnoxiously fast against the music.
+
+**It is paced to the tempo.** Every free-running rate in the library is in
+wall-clock seconds — `uTime * p_speed` in a shader, `m.t` in a module effect, a
+`sin(t*0.2)` in a storyboard expression — so a scene runs at exactly the same
+rate over a 70 BPM ballad as over a 140 BPM dance track. The beat-driven sources
+were never the problem; `beatPulse`, `bar` and the band followers already move
+with the song. It is the motion underneath them, which nothing was pacing.
+120 BPM is the reference. Below it the correction is proportional, because a
+slow song's beats are longer and proportionally more of every cycle was landing
+inside one; above it it is square-rooted and barely moves, since there is no
+evidence the library is too *slow* on fast material. An untrustworthy tempo
+estimate disables it — pacing a whole video to a wrong number is worse than not
+pacing it.
+
+**It restarts at each scene.** Almost every manifest modulates its speed with the
+music: `0.28 + 0.16*rms + 0.15*midRel`. The music moving the speed a little every
+frame is the point, but `uTime * speed` turns that wobble into a phase jump the
+size of *t* — seven minutes in, a one percent flicker in `rms` is several seconds
+of animation inside one frame. The effect stops being fast and becomes random,
+and it gets worse the longer the song runs. Integrating the rate is the textbook
+answer, but `renderAt(t)` has to stand alone — the preview scrubs and the encoder
+asks for arbitrary frames — so there is no running phase to accumulate into.
+Restarting the clock each scene bounds the multiplier instead, and it costs
+nothing: the boundary it jumps at is a cut or a transition, where the picture is
+being replaced anyway. Measured over this repo's own plans it takes mean
+frame-to-frame correlation from 0.69 to 0.84 and the number of scenes with no
+frame-to-frame continuity at all from seven to one. The lyric layer opts out and
+stays on song time, because a line is often still on screen when the scene under
+it cuts.
+
+The rule that falls out of this, for anyone writing a manifest: **never drive a
+rate from an impulse.** `beatPulse`, `onset` and the per-band `*Hit` sources are
+spikes — perfect on a brightness or a scale, wrong on a `speed`, where a spike is
+not a surge but a jump in position. Use the level or shape sibling (`midHit` →
+`midRel`) and put the impulse on something the effect can move instantly instead;
+`tunnel` pumps its wall with the kick and travels at a steady rate. A unit test
+enforces this.
 
 ### Iterating without rendering
 
@@ -226,6 +312,16 @@ travel, so an off-axis corridor flight or a sparse point field comes back as
 `churn` however plainly it is a flight. The flag worth always acting on is
 `BARELY MOVES`, which is a picture that changes too little to hold a scene.
 
+It also reports **`cont`** — how much of the picture survives a single frame, as
+the correlation between two frames 1/30 s apart. Near 1 the effect moved; near 0
+it was replaced, and an effect that replaces itself thirty times a second is not
+fast, it is noise. Neither coverage nor motion can see the difference, because a
+palette flash changes every pixel while the shape underneath stays put, and a
+structural churn changes the same pixels while nothing survives at all. `STROBES`
+flags the second case. It measures an effect's *own* rate — the modulation is
+held constant across the pair — so how a whole plan paces against its song is a
+separate question, answered above.
+
 ### Why the render loop is built this way
 
 The server asks the page for **one frame at a time** and waits for the pixels
@@ -246,7 +342,7 @@ projects/<Name>/
   project.json          aspect, fps, seed, encoder, LTX settings
   source/song.mp3       the imported source (+ song.txt if supplied)
   images/*.jpg          your own pictures, if you want any in it
-  analysis/analysis.json   bpm, beats, downbeats, sections, rms, bands
+  analysis/analysis.json   bpm, beats, downbeats, sections, rms, bands, fineBands
   plan/intent.json         what the LLM understood the song to be about
   plan/storyboard.json     the resolved effect timeline — editable
   ltx/clip_001.mp4 ...     cached AI clips
@@ -366,6 +462,10 @@ without containing any sync code:
 | `rms` `energy` | level now / section energy |
 | `sub bass lowMid mid high air` | the six band followers |
 | `rmsPeak` `subPeak` … `airPeak` | the same, held at their recent maximum then falling — a meter's peak indicator |
+| `subHit` … `airHit` | that band's own **attack** — how hard it was just struck, falling away after |
+| `subRel` … `airRel` | that band against the average across bands — spectral **shape**, 0.5 is "sitting at the average" |
+| `brightness` | spectral centroid: 0 all the energy is low, 1 all of it is high |
+| `band0` … `band11` | the twelve-band spectrum, low to high, about ¾ of an octave each |
 | `t` `sceneT` `sectionT` | seconds, progress through scene/section |
 | `imageT` | 0..1 through the image cue running on this scene, if any |
 
@@ -382,6 +482,36 @@ sustained. Sections in this repo sit at RMS 0.48 with an onset score of 0.01:
 full level, nothing hitting. A half-time passage needs no special case — its
 off-beats carry no transient, so the picture pulses at the rate the music does.
 
+**Band level is not spectral response.** Bind `bass` and it looks like you are
+reading the spectrum; measure it and you are reading the beat again. Every band
+rises and falls with the arrangement, so they move together and they move with
+the level — across this repo's own songs the mean |r| between one band and
+another is 0.44, and between a band and the RMS envelope 0.54. That is why a
+library where forty-odd effects referenced a band still looked like it only
+heard the kick.
+
+Two derived sources get out of it, both in `engine/modulation.js`:
+
+- **`*Rel` — shape.** The band minus the average across bands at that instant.
+  Whatever the whole spectrum does together cancels, and what is left is which
+  way the energy is leaning. Correlation with the level drops from 0.54 to
+  **0.15**, so an effect bound to it follows the arrangement — a filter opening,
+  a breakdown dropping to the bass — instead of pumping with everything else.
+- **`*Hit` — attack.** That band's own rise, normalised against the biggest
+  rises in this song and then allowed to fall away. A hi-hat pattern appears in
+  `airHit` and nowhere else, so one effect can answer the hats while another
+  answers the kick. `onset` is one number for the whole mix and can never say
+  that.
+
+Both are computed at load from the bands the analysis already carries, and
+`Imagine3D.Tests` prints the decorrelation table above for whatever song you
+point it at, so the claim is checkable rather than folklore.
+
+Reach for `*Rel` and `brightness` for anything that should follow the *music*
+(hue, camera, character), `*Hit` for anything that should flicker with the
+*percussion*, and plain band level or `beatPulse` for weight and punch. Spread
+them: if every effect binds the same source, a finer spectrum buys nothing.
+
 The shader gets `uResolution uAspect uTime uBeatPulse uBass …`, the run's five
 palette stops as `uPal0..4`, and one `p_<name>` uniform per declared parameter.
 Shared GLSL is available via `#include`:
@@ -392,9 +522,25 @@ Shared GLSL is available via `#include`:
 #include "palette.glsl"  // pal(), palClamp(), palSteps()
 #include "blend.glsl"    // blendMode() incl. multiply, screen, difference, XOR
 #include "sdf.glsl"      // primitives, raymarch(), softShadow(), AO
-#include "panel.glsl"    // 2D shapes, pixel-unit fill()/stroke(), spectrumNow()
+#include "panel.glsl"    // 2D shapes, pixel-unit fill()/stroke(), spectrum sampling
 #include "image.glsl"    // imageUv() cover-fit, imageSample(), imageTone()
 ```
+
+**Sampling the spectrum in a shader.** The twelve bands arrive as the array
+uniforms `uBands uBandPeaks uBandHits uBandRel`, but prefer `panel.glsl`'s
+`spectrumNow(x)` / `spectrumPeak(x)` / `spectrumHit(x)` / `spectrumRel(x)`, which
+read them as a continuous curve with `x` running 0 (lowest band) to 1 (highest).
+Because the bands are geometrically spaced, `x` is an *octave* axis: equal steps
+are equal musical intervals, rather than half the curve being spent on the top
+two octaves where music has little but cymbals.
+
+That curve is what turns an effect with repeated elements into an instrument
+rather than one knob. Give each bar, ring, layer or blob its own `x` and the
+picture reads the mix apart — `kefrens` puts a bar on each band, `vectorballs`
+tunes each ring of the corridor, `tunnel` wires the strip lights around the wall
+and the hoops coming at the camera, `water` strikes each drop with its own part
+of the mix. Sample it *once per element*, not per raymarch step: `metaballs`
+fills a `float gBandR[12]` in `main()` for exactly that reason.
 
 `kind` is one of `scene2d`, `raymarch`, `scene3d`, `post`, `transition`.
 Set `"module": true` and supply `effect.js` instead when the effect needs real
@@ -468,8 +614,11 @@ Transitions sweep their wipe on a loop rather than sitting at one frozen slice,
 post effects are shown over a test image, and effects that draw one of the
 project's images are given that project's first picture — with a stand-in when it
 has none, because "what does this effect do" is a different question with a
-photograph in it than with a test pattern. So all 93 effects are legible and not
-just the scenes. Deep links work: `preview.html?kind=raymarch&play=tunnel&t=42`.
+photograph in it than with a test pattern. The lyric card steps through all ten
+of its treatments, four seconds and one whole line lifetime each, over a sample
+line rasterised by the renderer's own code — a plain white one would preview a
+different shader, since half the treatments address the words individually. So
+all 93 effects are legible and not just the scenes. Deep links work: `preview.html?kind=raymarch&play=tunnel&t=42`.
 
 One WebGL context serves the whole page — ninety is past what a browser will
 give you, and would be ninety copies of every compiled shader. Cards that are

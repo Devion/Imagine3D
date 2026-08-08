@@ -86,6 +86,25 @@ export class FragmentEffect {
     set('uMidPeak', m.midPeak);
     set('uHighPeak', m.highPeak);
     set('uAirPeak', m.airPeak);
+    set('uSubHit', m.subHit);
+    set('uBassHit', m.bassHit);
+    set('uLowMidHit', m.lowMidHit);
+    set('uMidHit', m.midHit);
+    set('uHighHit', m.highHit);
+    set('uAirHit', m.airHit);
+    set('uSubRel', m.subRel);
+    set('uBassRel', m.bassRel);
+    set('uLowMidRel', m.lowMidRel);
+    set('uMidRel', m.midRel);
+    set('uHighRel', m.highRel);
+    set('uAirRel', m.airRel);
+    set('uBrightness', m.brightness);
+
+    const setArr = (name, value) => { if (u[name] && value) gl.uniform1fv(u[name], value); };
+    setArr('uBands', m.bandArr);
+    setArr('uBandPeaks', m.bandPeakArr);
+    setArr('uBandHits', m.bandHitArr);
+    setArr('uBandRel', m.bandRelArr);
 
     const pal = state.palette;
     for (let i = 0; i < 5; i++) {

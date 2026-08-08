@@ -13,12 +13,12 @@
   "shader": "shader.frag",
   "params": {
     "drops": { "type": "float", "default": "6.0", "min": 1, "max": 8 },
-    "spread": { "type": "float", "default": "0.75 + 0.25*rms", "min": 0.1, "max": 2 },
+    "spread": { "type": "float", "default": "0.7 + 0.25*rms + 0.25*lowMidRel", "min": 0.1, "max": 2 },
     "feather": { "type": "float", "default": "0.28", "min": 0.02, "max": 1,
                 "description": "How soft the diffusion front is, as a fraction of the bloom's radius." },
-    "flow": { "type": "float", "default": "0.35 + 0.3*lowMid", "min": 0, "max": 1.5,
+    "flow": { "type": "float", "default": "0.30 + 0.30*lowMid + 0.30*midHit", "min": 0, "max": 1.5,
              "description": "Warp of the whole plane — the water moving, not the ink." },
-    "ink": { "type": "float", "default": "0.9 + 0.3*bass", "min": 0.1, "max": 2 },
-    "speed": { "type": "float", "default": "1.1 + 1.0*energy", "min": 0.05, "max": 2 }
+    "ink": { "type": "float", "default": "0.85 + 0.30*bass + 0.25*subRel", "min": 0.1, "max": 2 },
+    "speed": { "type": "float", "default": "0.85 + 0.80*energy + 0.30*midRel", "min": 0.05, "max": 2 }
   }
 }

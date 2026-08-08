@@ -11,15 +11,15 @@
   "description": "Raindrop rings displace a folded fractal field. The source synthesised its own heartbeat to pulse the zoom; here the beat does it, so the rings land with the track.",
   "shader": "shader.frag",
   "params": {
-    "speed": { "type": "float", "default": "0.28 + 0.16*rms", "min": 0.05, "max": 2.0,
+    "speed": { "type": "float", "default": "0.28 + 0.16*rms + 0.15*midRel", "min": 0.05, "max": 2.0,
               "description": "Rate of the fold rotation and drift." },
-    "ripples": { "type": "float", "default": "1.0 + 0.6*high", "min": 0.0, "max": 3.0,
+    "ripples": { "type": "float", "default": "0.9 + 0.6*high + 0.5*highHit", "min": 0.0, "max": 3.0,
                 "description": "Strength of the expanding rings displacing the field." },
     "folds": { "type": "float", "default": "28.0", "min": 8.0, "max": 48.0,
               "description": "Fold iterations. The detail is entirely in this loop, and so is most of the cost." },
-    "punch": { "type": "float", "default": "0.03 + 0.05*beatPulse", "min": 0.0, "max": 0.25,
+    "punch": { "type": "float", "default": "0.03 + 0.04*beatPulse + 0.03*bassHit", "min": 0.0, "max": 0.25,
               "description": "How far the frame snaps inward on the beat." },
-    "tint": { "type": "float", "default": "0.8", "min": 0.0, "max": 1.0,
+    "tint": { "type": "float", "default": "0.6 + 0.4*brightness", "min": 0.0, "max": 1.0,
              "description": "Blend toward the project palette. The source resolves to greyscale, so at 0 this renders monochrome." }
   }
 }

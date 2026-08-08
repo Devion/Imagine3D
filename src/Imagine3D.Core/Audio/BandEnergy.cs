@@ -12,16 +12,64 @@ public static class BandEnergy
         (20, 60), (60, 150), (150, 400), (400, 1500), (1500, 5000), (5000, 16000),
     ];
 
-    public static float[][] Compute(Spectrogram spec, double attackMs = 8, double releaseMs = 180)
+    /// How many bands the fine spectrum carries. Twelve over the analysable range
+    /// works out at about three quarters of an octave each.
+    public const int FineCount = 12;
+
+    /// Top of the fine spectrum. Decoder fixes analysis at 22.05 kHz, so Nyquist
+    /// is 11.025 kHz and the last stretch below it is inside the resampler's
+    /// rolloff - a band placed up there measures the resampler, not the music.
+    /// The coarse `air` band still declares 16 kHz and is clamped, which is
+    /// harmless when it is one wide band but would waste two of twelve here.
+    const double FineLoHz = 20, FineHiHz = 10500;
+
+    /// The twelve band edges, 13 values, geometrically spaced.
+    ///
+    /// Log rather than linear because pitch is. Splitting 20 Hz - 10.5 kHz evenly
+    /// would put nine of the twelve bands above 2.6 kHz, where music has little
+    /// but cymbals and sibilance, and crush every bass note, every vocal
+    /// fundamental and most of the harmonic content of the arrangement into the
+    /// first band. Equal ratios give equal musical intervals, so each band covers
+    /// a comparable amount of what is actually being played.
+    public static readonly double[] FineEdges = BuildFineEdges();
+
+    static double[] BuildFineEdges()
+    {
+        var e = new double[FineCount + 1];
+        double ratio = Math.Pow(FineHiHz / FineLoHz, 1.0 / FineCount);
+        e[0] = FineLoHz;
+        for (int i = 1; i <= FineCount; i++) e[i] = e[i - 1] * ratio;
+        return e;
+    }
+
+    public static float[][] Compute(Spectrogram spec, double attackMs = 8, double releaseMs = 180) =>
+        Compute(spec, Ranges, attackMs, releaseMs);
+
+    /// The fine spectrum, on a faster release than the coarse six.
+    ///
+    /// A coarse band covers a whole register, so something in it is nearly always
+    /// sounding and a long release reads as the register's level. A fine band
+    /// tracks closer to one instrument, and holding it for 180 ms smears a hi-hat
+    /// pattern into a plateau - which is exactly the detail these bands exist to
+    /// expose.
+    public static float[][] ComputeFine(Spectrogram spec, double attackMs = 6, double releaseMs = 110)
+    {
+        var ranges = new (double Lo, double Hi)[FineCount];
+        for (int i = 0; i < FineCount; i++) ranges[i] = (FineEdges[i], FineEdges[i + 1]);
+        return Compute(spec, ranges, attackMs, releaseMs);
+    }
+
+    static float[][] Compute(
+        Spectrogram spec, (double Lo, double Hi)[] ranges, double attackMs, double releaseMs)
     {
         int n = spec.Frames;
-        var bands = new float[Ranges.Length][];
+        var bands = new float[ranges.Length][];
         double dtMs = 1000.0 / spec.FrameRate;
 
-        for (int r = 0; r < Ranges.Length; r++)
+        for (int r = 0; r < ranges.Length; r++)
         {
-            int lo = spec.HzToBin(Ranges[r].Lo);
-            int hi = spec.HzToBin(Math.Min(Ranges[r].Hi, spec.SampleRate / 2.0 - 1));
+            int lo = spec.HzToBin(ranges[r].Lo);
+            int hi = spec.HzToBin(Math.Min(ranges[r].Hi, spec.SampleRate / 2.0 - 1));
             var raw = new float[n];
             for (int f = 0; f < n; f++)
             {

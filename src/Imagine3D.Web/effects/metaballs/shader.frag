@@ -1,6 +1,7 @@
 #include "common.glsl"
 #include "noise.glsl"
 #include "palette.glsl"
+#include "panel.glsl"
 #include "sdf.glsl"
 
 // Metaballs with a third dimension.
@@ -24,6 +25,14 @@
 
 float gCount, gSize, gSpread, gGoo, gTime;
 
+/// Per-blob radius scale, one band each, low to high.
+///
+/// Held in a global filled once in main() rather than sampled inside map(),
+/// because map() runs sixty-odd times per pixel and would otherwise re-read the
+/// whole spectrum on every step of every ray for a value that cannot change
+/// within a frame.
+float gBandR[12];
+
 vec3 blobAt(float i) {
   float f = i + 1.0;
   float s = hash11(f * 3.7);
@@ -38,7 +47,7 @@ float map(vec3 p) {
   float d = 1e9;
   for (int i = 0; i < 12; i++) {
     if (float(i) >= gCount) break;
-    float r = gSize * (0.7 + 0.6 * hash11(float(i) + 3.0));
+    float r = gSize * (0.7 + 0.6 * hash11(float(i) + 3.0)) * gBandR[i];
     d = smin(d, length(p - blobAt(float(i))) - r, gGoo);
   }
   return d;
@@ -65,6 +74,12 @@ void main() {
   gSize = p_size;
   gSpread = p_spread;
   gGoo = max(0.02, p_goo);
+
+  // A blob per band, low to high. The cluster then swells unevenly - the big
+  // slow one on the kick, the small ones fluttering on the top end - so the mass
+  // is being played rather than inflated.
+  for (int i = 0; i < 12; i++)
+    gBandR[i] = 0.62 + 0.70 * spectrumNow(float(i) / 11.0) + 0.30 * spectrumHit(float(i) / 11.0);
 
   vec2 uv = centered(vUv, uAspect);
 

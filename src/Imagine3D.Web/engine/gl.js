@@ -42,6 +42,33 @@ uniform float uSub, uBass, uLowMid, uMid, uHigh, uAir;
 uniform float uRmsPeak;
 uniform float uSubPeak, uBassPeak, uLowMidPeak, uMidPeak, uHighPeak, uAirPeak;
 
+// Per-band attack: how hard THIS band was just struck, 0..1, falling away after.
+// A hi-hat pattern lives in uHighHit/uAirHit and nowhere else, so an effect can
+// answer the hats while another answers the kick - which uOnset, being one
+// number for the whole mix, cannot express.
+uniform float uSubHit, uBassHit, uLowMidHit, uMidHit, uHighHit, uAirHit;
+
+// Per-band spectral shape: the band against the average across bands right now,
+// 0..1 with 0.5 meaning "sitting at the average". Nearly independent of loudness
+// (measured |r| 0.15 against the RMS envelope, where band level runs 0.54), so
+// this is the source to bind when an effect should follow the arrangement rather
+// than pump on the beat with everything else.
+uniform float uSubRel, uBassRel, uLowMidRel, uMidRel, uHighRel, uAirRel;
+
+// Spectral centroid, 0 = all the energy is low, 1 = all of it is high.
+uniform float uBrightness;
+
+// The twelve-band spectrum, low to high: finer than the six named bands, at
+// about three quarters of an octave each. Prefer the sampling helpers in
+// panel.glsl (spectrumNow/spectrumPeak/spectrumHit/spectrumRel) to indexing
+// these directly - they read a continuous curve across the spectrum, which is
+// what most effects actually want.
+#define BAND_COUNT 12
+uniform float uBands[BAND_COUNT];      // level now
+uniform float uBandPeaks[BAND_COUNT];  // peak-hold
+uniform float uBandHits[BAND_COUNT];   // attack
+uniform float uBandRel[BAND_COUNT];    // shape
+
 uniform sampler2D uPrev;      // what this pass is drawing on top of
 uniform sampler2D uNext;      // transitions only: the incoming scene
 uniform sampler2D uFeedback;  // the previous frame, for trails and echo

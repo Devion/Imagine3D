@@ -1,5 +1,6 @@
 #include "common.glsl"
 #include "palette.glsl"
+#include "panel.glsl"
 
 // Nested glowing rings from repeated space folding.
 //
@@ -32,14 +33,21 @@ void main() {
 
     vec3 layerCol = pal(fract(length(uv0) + fi * 0.4 + t));
 
+    // Each fold answers its own band. Ring *spacing* is what carries it, not
+    // just brightness, so the layers drift in and out of register with each
+    // other as the mix moves and the interference between them is the music.
+    float bandX = layers > 1 ? fi / float(layers - 1) : 0.0;
+    float band = spectrumNow(bandX);
+
     // Concentric rings, then fold to a positive distance so both sides of each
     // ring glow.
-    d = abs(sin(d * p_rings + uTime) / p_rings);
+    float rings = p_rings * (0.78 + 0.44 * band);
+    d = abs(sin(d * rings + uTime) / rings);
 
     // Inverse falloff: the filament.
     d = pow(0.01 / max(d, 1e-5), p_sharp);
 
-    col += layerCol * d;
+    col += layerCol * d * (0.60 + 0.75 * band);
   }
 
   // The sum is unbounded; tone-map rather than clip.

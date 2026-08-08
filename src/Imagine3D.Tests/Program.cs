@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Imagine3D.Audio;
 using Imagine3D.Direct;
 using Imagine3D.Lyrics;
@@ -25,6 +26,9 @@ static class Program
 
         if (args.Length > 0 && args[0] == "--flow")
             return FlowReport(args.Skip(1).ToArray());
+
+        if (args.Length > 0 && args[0] == "--lyrics")
+            return LyricReport(args.Skip(1).ToArray());
 
         int failures = 0;
         failures += UnitTests();
@@ -91,7 +95,83 @@ static class Program
                               $"   sd {sd:F3}  {Bar(P(0.90) - P(0.10))}");
         }
 
+        SpectrumReport(a);
+
         return failures;
+    }
+
+    /// How much the spectrum bands actually say that the level does not.
+    ///
+    /// Band *level* is the wrong thing to drive a visual with on its own, and the
+    /// numbers here are why: every band rises and falls with the arrangement, so
+    /// they correlate with the RMS envelope and with each other, and an effect
+    /// bound to one of them ends up pulsing on the beat like everything else -
+    /// which is the complaint that prompted the fine bands existing at all.
+    ///
+    /// Subtracting the instantaneous mean across the bands leaves the spectral
+    /// *shape* - which way the energy is leaning right now - and that is very
+    /// nearly uncorrelated with loudness. The engine derives its `*Rel` sources
+    /// exactly this way (see engine/modulation.js); this measures the property
+    /// they depend on, on real material, rather than assuming it.
+    static void SpectrumReport(AudioAnalysis a)
+    {
+        if (a.FineBands is not { Length: > 0 } fine) { Console.WriteLine("\n  (no fine bands)"); return; }
+        int n = fine.Length, frames = fine[0].Length;
+
+        Console.WriteLine($"\n  fine spectrum ({n} bands, {a.FineBandHz?[0]:F0}-{a.FineBandHz?[n]:F0} Hz):");
+        for (int i = 0; i < n; i++)
+        {
+            var v = (float[])fine[i].Clone();
+            Array.Sort(v);
+            float P(double p) => v[Math.Clamp((int)(v.Length * p), 0, v.Length - 1)];
+            Console.WriteLine($"    {a.FineBandHz?[i],7:F0}-{a.FineBandHz?[i + 1],-7:F0} " +
+                              $"{P(0.10):F2} / {P(0.50):F2} / {P(0.90):F2}  {Bar(P(0.90) - P(0.10))}");
+        }
+
+        // Shape: each band against the mean across bands at that instant.
+        var shape = new float[n][];
+        for (int i = 0; i < n; i++) shape[i] = new float[frames];
+        for (int f = 0; f < frames; f++)
+        {
+            double mean = 0;
+            for (int i = 0; i < n; i++) mean += fine[i][f];
+            mean /= n;
+            for (int i = 0; i < n; i++) shape[i][f] = (float)(fine[i][f] - mean);
+        }
+
+        double MeanPairwise(float[][] x)
+        {
+            double sum = 0; int c = 0;
+            for (int i = 0; i < n; i++)
+                for (int j = i + 1; j < n; j++) { sum += Math.Abs(Corr(x[i], x[j])); c++; }
+            return sum / Math.Max(1, c);
+        }
+        double MeanVsRms(float[][] x)
+        {
+            double sum = 0;
+            for (int i = 0; i < n; i++) sum += Math.Abs(Corr(x[i], a.Rms));
+            return sum / n;
+        }
+
+        Console.WriteLine("\n  decorrelation (mean |r|, lower is more independent):");
+        Console.WriteLine($"    band level  vs each other {MeanPairwise(fine),5:F2}   vs rms {MeanVsRms(fine),5:F2}");
+        Console.WriteLine($"    band shape  vs each other {MeanPairwise(shape),5:F2}   vs rms {MeanVsRms(shape),5:F2}");
+    }
+
+    static double Corr(float[] a, float[] b)
+    {
+        int n = Math.Min(a.Length, b.Length);
+        if (n == 0) return 0;
+        double ma = 0, mb = 0;
+        for (int i = 0; i < n; i++) { ma += a[i]; mb += b[i]; }
+        ma /= n; mb /= n;
+        double num = 0, va = 0, vb = 0;
+        for (int i = 0; i < n; i++)
+        {
+            double da = a[i] - ma, db = b[i] - mb;
+            num += da * db; va += da * da; vb += db * db;
+        }
+        return va < 1e-12 || vb < 1e-12 ? 0 : num / Math.Sqrt(va * vb);
     }
 
     /// Measures how well Whisper + forced alignment times a real song's lyrics.
@@ -422,6 +502,76 @@ static class Program
         }
     }
 
+    /// Which lyric treatment the director hands each section, across every project
+    /// and several seeds.
+    ///
+    /// The treatments are not interchangeable and the report is here to show that
+    /// they are not being handed out as if they were. A cascade steps a word per
+    /// beat and wants a grid worth stepping on; a karaoke wipe wants a line long
+    /// enough for the wipe to be a wipe. So this prints what the section actually
+    /// was - its energy, the song's tempo, the spectral tilt - beside what it got,
+    /// and the cue lengths each style ends up carrying. A style whose mean line is
+    /// under a second is a style that is being asked to do something it cannot.
+    static int LyricReport(string[] args)
+    {
+        int seeds = int.TryParse(args.ElementAtOrDefault(0), out var s) ? s : 6;
+        var root = args.ElementAtOrDefault(1) ?? FindProjectsRoot();
+        if (!Directory.Exists(root)) { Console.WriteLine($"no projects at {root}"); return 1; }
+
+        var director = new Director(EffectRegistry.Load(FindWebRoot()));
+        var json = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+
+        var uses = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var seconds = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        var shortest = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        int plans = 0, cues = 0;
+
+        Console.WriteLine($"=== Lyric treatments over {seeds} seeds ===\n");
+
+        foreach (var dir in Directory.EnumerateDirectories(root).OrderBy(d => d))
+        {
+            var file = Path.Combine(dir, "analysis", "analysis.json");
+            if (!File.Exists(file)) continue;
+
+            var analysis = JsonSerializer.Deserialize<AudioAnalysis>(File.ReadAllText(file), json);
+            if (analysis is null || analysis.Lyrics.Length == 0) continue;
+
+            var perProject = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < seeds; i++)
+            {
+                var sb = director.Build(analysis, new ProjectSettings { Seed = 1 + i * 7919, Aspect = "16:9" }, null);
+                plans++;
+                foreach (var cue in sb.Texts)
+                {
+                    cues++;
+                    Bump(uses, cue.Style);
+                    Bump(perProject, cue.Style);
+                    double len = cue.End - cue.Start;
+                    seconds[cue.Style] = seconds.GetValueOrDefault(cue.Style) + len;
+                    shortest[cue.Style] = Math.Min(shortest.GetValueOrDefault(cue.Style, double.MaxValue), len);
+                }
+            }
+
+            var mix = perProject.OrderByDescending(kv => kv.Value)
+                                .Select(kv => $"{kv.Key} {kv.Value / seeds}");
+            Console.WriteLine($"  {Path.GetFileName(dir),-26} {analysis.Bpm,5:F0} bpm  " +
+                              $"grid {(analysis.BeatGridReliable ? "ok " : "weak")}  " +
+                              $"{string.Join(", ", mix)}");
+        }
+
+        if (cues == 0) { Console.WriteLine("\nno analysed project has lyrics"); return 1; }
+
+        Console.WriteLine($"\n{plans} plans, {cues} lyric cues\n");
+        Console.WriteLine("  style        cues    share   mean line   shortest");
+        foreach (var (style, n) in uses.OrderByDescending(kv => kv.Value))
+            Console.WriteLine($"  {style,-11} {n,5} {n / (double)cues,8:P1} " +
+                              $"{seconds[style] / n,10:F2}s {shortest[style],10:F2}s");
+
+        return 0;
+
+        static void Bump(Dictionary<string, int> d, string k) => d[k] = d.GetValueOrDefault(k) + 1;
+    }
+
     /// How one class of scene boundary got edited, across every plan.
     sealed class EditStats
     {
@@ -572,6 +722,45 @@ static class Program
                     Aspect = "16:9", Fps = 30, Seed = 7, RandomSeedEachRun = false,
                     Encoder = "h264_nvenc", Crf = 24, SaveTrimmedCopy = true,
                 }, analysis) is null, "a re-encode setting threw away the plan");
+        }
+
+        // No effect may drive a *rate* from an impulse source.
+        //
+        // beatPulse, onset and the per-band hits are spikes: they jump and decay
+        // within a few frames, which is exactly what a brightness or a scale
+        // wants and exactly what a speed cannot have. Effects animate as
+        // `uTime * p_speed`, so a spike in the speed is not a surge, it is a
+        // jump in *position* the size of uTime - and the picture stops being
+        // fast and starts being random. Six manifests had one and they were the
+        // effects that read as obnoxious.
+        //
+        // The fix in every case was the same: swap the impulse for its level or
+        // shape sibling (midHit -> midRel), which still follows the same part of
+        // the mix without spiking. Put the impulse on something the effect can
+        // move instantly instead - see tunnel's wall pump.
+        {
+            var impulse = new Regex(@"\b(beatPulse|barPulse|onset|\w*Hit)\b", RegexOptions.IgnoreCase);
+            var rate = new Regex(
+                @"^(speed|travel|flow|spin|rate|drift|orbit|walk|scroll|swirl|churn|cycle|advance|climb|roll|turn)$",
+                RegexOptions.IgnoreCase);
+
+            // Named like a rate, used as a distance. inkbloom spends p_flow on
+            // `uv + (noise - 0.5) * p_flow`, which is how far the bleed reaches
+            // and not how fast it travels, so a spike in it is a spike in the
+            // spread - instant, bounded, and exactly what the impulse is for.
+            // The check is on the name because nothing here can read GLSL; this
+            // is the one place where the name and the use disagree.
+            string[] exempt = ["inkbloom.flow"];
+
+            var offenders = new List<string>();
+            foreach (var e in EffectRegistry.Load(FindWebRoot()).All)
+                foreach (var (key, spec) in e.Params)
+                    if (rate.IsMatch(key) && impulse.IsMatch(spec.Default ?? "") &&
+                        !exempt.Contains($"{e.Id}.{key}", StringComparer.OrdinalIgnoreCase))
+                        offenders.Add($"{e.Id}.{key} = {spec.Default}");
+
+            fail += Check("No effect drives a rate from an impulse source",
+                offenders.Count == 0, string.Join("; ", offenders));
         }
 
         return fail;

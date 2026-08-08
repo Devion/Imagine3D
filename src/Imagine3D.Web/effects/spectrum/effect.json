@@ -24,11 +24,11 @@
               "description": "How fast the camera flies down the canyon." },
     "wave": { "type": "float", "default": "2.4", "min": 0, "max": 8,
              "description": "Rate of the phase travelling down the depth axis. 0 makes every row identical and the field reads as one solid ridge." },
-    "detail": { "type": "float", "default": "0.35", "min": 0, "max": 1,
+    "detail": { "type": "float", "default": "0.28 + 0.20*airHit", "min": 0, "max": 1,
                "description": "Per-bar deviation from the six-point curve, scaled by onset. 0 gives the honest interpolation; past ~0.7 neighbouring bars disagree more than the music does." },
     "tint": { "type": "float", "default": "0.72", "min": 0, "max": 1,
              "description": "Blends the green/amber/red ladder toward the project palette. 0 is a literal hi-fi meter, 1 is the palette alone and loses the meaning the colours carry." },
-    "glow": { "type": "float", "default": "0.9 + 0.5*beatPulse", "min": 0, "max": 3 },
+    "glow": { "type": "float", "default": "0.9 + 0.4*beatPulse + 0.4*highHit", "min": 0, "max": 3 },
     "reflect": { "type": "float", "default": "0.55", "min": 0, "max": 1,
                 "description": "Strength of the reflection in the floor." }
   }

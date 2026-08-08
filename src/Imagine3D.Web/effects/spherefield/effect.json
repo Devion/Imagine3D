@@ -12,9 +12,9 @@
   "description": "Infinite lattice of shaded spheres flown through, with soft shadows and AO. The 'proper 3D' scene that raytraced demos showed off.",
   "shader": "shader.frag",
   "params": {
-    "radius": { "type": "float", "default": "0.34 + 0.1*beatPulse", "min": 0.05, "max": 0.9 },
-    "spacing": { "type": "float", "default": "2.2", "min": 1, "max": 6 },
-    "speed": { "type": "float", "default": "0.7 + 1.2*energy", "min": 0, "max": 4 },
+    "radius": { "type": "float", "default": "0.34 + 0.08*beatPulse + 0.08*bassHit", "min": 0.05, "max": 0.9 },
+    "spacing": { "type": "float", "default": "2.0 + 0.5*lowMidRel", "min": 1, "max": 6 },
+    "speed": { "type": "float", "default": "0.7 + 1.2*energy + 0.4*bassRel", "min": 0, "max": 4 },
     "steps": { "type": "float", "default": "70.0", "min": 24, "max": 160 }
   }
 }

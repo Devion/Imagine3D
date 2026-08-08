@@ -11,7 +11,7 @@
   "shader": "shader.frag",
   "params": {
     "segments": { "type": "float", "default": "6.0", "min": 2, "max": 24 },
-    "spin": { "type": "float", "default": "0.12", "min": -2, "max": 2 },
-    "zoom": { "type": "float", "default": "1.0 + 0.12*beatPulse", "min": 0.2, "max": 3 }
+    "spin": { "type": "float", "default": "0.06 + 0.16*brightness", "min": -2, "max": 2 },
+    "zoom": { "type": "float", "default": "1.0 + 0.10*beatPulse + 0.08*highHit", "min": 0.2, "max": 3 }
   }
 }

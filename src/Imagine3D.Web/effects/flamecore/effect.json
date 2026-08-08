@@ -13,19 +13,19 @@
   "params": {
     "speed": { "type": "float", "default": "1.6 + 1.4*rms", "min": 0.2, "max": 6.0,
               "description": "How fast the flames lick upward." },
-    "walk": { "type": "float", "default": "0.9 + 1.4*energy", "min": 0, "max": 5,
+    "walk": { "type": "float", "default": "0.9 + 1.4*energy + 0.5*midRel", "min": 0, "max": 5,
              "description": "How fast the camera moves into the field. 0 stands still in it." },
-    "turbulence": { "type": "float", "default": "0.55 + 0.30*bass", "min": 0.15, "max": 1.6,
+    "turbulence": { "type": "float", "default": "0.50 + 0.30*bass + 0.25*bassHit", "min": 0.15, "max": 1.6,
                    "description": "Noise frequency eating into the columns. Low is smooth teardrops, high is torn and ragged." },
     "column": { "type": "float", "default": "0.58", "min": 0.15, "max": 1.2,
                "description": "Base radius of a flame column, against a spacing of 2.1. Past about 1.0 the columns touch and the field stops being columns at all — the camera is then permanently inside fuel and the frame comes out as one flat wall of smoke." },
     "density": { "type": "float", "default": "0.80 + 0.35*rms", "min": 0.2, "max": 3.0,
                 "description": "Opacity per unit of fuel. High makes a solid body, low makes a haze you can see through." },
-    "glow": { "type": "float", "default": "1.0 + 0.5*beatPulse", "min": 0.3, "max": 3.0,
+    "glow": { "type": "float", "default": "1.0 + 0.4*beatPulse + 0.4*airHit", "min": 0.3, "max": 3.0,
              "description": "Emission gain." },
     "steps": { "type": "float", "default": "48.0", "min": 16, "max": 64,
               "description": "March samples. Below ~32 the volume starts to band." },
-    "tint": { "type": "float", "default": "0.35", "min": 0.0, "max": 1.0,
+    "tint": { "type": "float", "default": "0.25 + 0.25*brightness", "min": 0.0, "max": 1.0,
              "description": "Blend toward the project palette. 0 keeps the native orange-to-blue gradient. Past about 0.6 a cool palette stops reading as fire at all." }
   }
 }

@@ -9,8 +9,8 @@
   "description": "Threshold bloom with an anamorphic horizontal bias. Intensity rides the highs so cymbals bloom.",
   "shader": "shader.frag",
   "params": {
-    "threshold": { "type": "float", "default": "0.62 - 0.15*energy", "min": 0, "max": 1 },
-    "intensity": { "type": "float", "default": "0.5 + 0.7*high", "min": 0, "max": 3 },
+    "threshold": { "type": "float", "default": "0.62 - 0.15*energy - 0.10*airRel", "min": 0, "max": 1 },
+    "intensity": { "type": "float", "default": "0.5 + 0.7*high + 0.5*airHit", "min": 0, "max": 3 },
     "radius": { "type": "float", "default": "2.5", "min": 0.5, "max": 8 },
     "anamorphic": { "type": "float", "default": "2.2", "min": 1, "max": 6 }
   }

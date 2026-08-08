@@ -253,7 +253,11 @@ public sealed class GenerationPipeline(
             {
                 var cached = JsonSerializer.Deserialize<AudioAnalysis>(
                     File.ReadAllText(paths.AnalysisFile), Json.Options);
-                if (cached is not null)
+                // An analysis written before the fine spectrum existed is missing
+                // the bands half the effect library now modulates on, and nothing
+                // downstream can reconstruct them from what it does carry. Treat it
+                // as stale and recompute rather than serving effects a flat zero.
+                if (cached is { HasFineBands: true })
                 {
                     progress.Report(new StageProgress(PipelineStage.Analyze, 1.0,
                         $"Reusing analysis - {cached.Bpm:F1} BPM, {cached.Sections.Length} sections"));

@@ -527,8 +527,27 @@ export class Renderer {
     const cue = this.text.update(this.storyboard.texts ?? [], t);
     if (cue) {
       const cueT = (t - cue.start) / Math.max(1e-6, cue.end - cue.start);
-      const tState = this.baseState(t, scene, { cueT, style: 0 });
-      tState.amount = STYLE_INDEX[cue.style] ?? 0;
+      const style = STYLE_INDEX[cue.style] ?? 0;
+      // Where the line is in the bar as well as in itself. A style that steps
+      // through the words one per beat needs to be told what a beat is, and it
+      // has to be the tracked grid rather than 60/bpm or the words come off the
+      // beat the moment the tempo moves at all.
+      const tState = this.baseState(t, scene, {
+        cueT,
+        style,
+        cueBeats: this.mod.beatsBetween(cue.start, t),
+        cueSpan: this.mod.beatsBetween(cue.start, cue.end),
+        cueIds: 1,
+        // Song time, not the scene-relative clock every other pass runs on (see
+        // Modulation.at). A line is often still on screen when the scene under
+        // it cuts, and the text is the one thing that did not change across that
+        // edit - restarting its clock would jump the colour cycle and the wave
+        // in the middle of a word. Nothing in this pass multiplies time by a
+        // music-driven rate, so it has none of the drift that made the scene
+        // clock necessary in the first place.
+        t: t * this.mod.pace,
+      });
+      tState.amount = style;
       const textParams = evalParams(this.compiled.get('util:textcomposite') ?? {}, tState.mod);
       this.drawEffect('textcomposite', this.post.write, tState, textParams,
         this.textures({ prev: current.texture, text: this.text.texture }));
@@ -666,4 +685,9 @@ export class Renderer {
   }
 }
 
-const STYLE_INDEX = { wave: 0, slam: 1, fade: 2, scroll: 3 };
+/// Storyboard style name -> the index effects/textcomposite switches on. An
+/// unknown name falls back to the wavy scroller rather than dropping the line.
+const STYLE_INDEX = {
+  wave: 0, slam: 1, fade: 2, scroll: 3,
+  karaoke: 4, cascade: 5, spectrum: 6, shockwave: 7, drift: 8, shatter: 9,
+};

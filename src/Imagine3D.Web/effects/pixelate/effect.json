@@ -10,7 +10,7 @@
   "description": "Drops the frame to a chunky pixel grid — the resolution steps down on the beat, which reads as the demo 'dropping a mode'.",
   "shader": "shader.frag",
   "params": {
-    "size": { "type": "float", "default": "160.0 - 90.0*beatPulse", "min": 16, "max": 640,
+    "size": { "type": "float", "default": "170.0 - 80.0*beatPulse - 60.0*bassHit", "min": 16, "max": 640,
              "description": "Horizontal pixel count. Lower is chunkier." }
   }
 }

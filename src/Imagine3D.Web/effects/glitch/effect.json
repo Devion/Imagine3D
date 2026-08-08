@@ -9,7 +9,7 @@
   "description": "Signal corruption: bands of the frame torn sideways with the colour channels drifting apart at the tear, blocks landing a few pixels off, and soft dropouts. Fires on transients rather than continuously, and never erases the picture underneath.",
   "shader": "shader.frag",
   "params": {
-    "amount": { "type": "float", "default": "0.2*beatPulse + 0.4*onset", "min": 0, "max": 1 },
+    "amount": { "type": "float", "default": "0.15*beatPulse + 0.35*onset + 0.35*highHit", "min": 0, "max": 1 },
     "blocks": { "type": "float", "default": "0.35", "min": 0, "max": 1,
                "description": "How much of the frame breaks into displaced blocks." }
   }

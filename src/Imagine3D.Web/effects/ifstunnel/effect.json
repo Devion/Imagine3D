@@ -15,9 +15,9 @@
     "folds": { "type": "float", "default": "5.0", "min": 1, "max": 8 },
     "sectors": { "type": "float", "default": "5.0", "min": 2, "max": 12,
                 "description": "Kaleidoscope sectors around the tunnel axis." },
-    "speed": { "type": "float", "default": "2.0 + 2.5*energy", "min": 0, "max": 10 },
-    "glow": { "type": "float", "default": "1.0 + 0.7*beatPulse", "min": 0.1, "max": 4 },
-    "pulse": { "type": "float", "default": "1.0", "min": 0, "max": 3,
+    "speed": { "type": "float", "default": "2.0 + 2.5*energy + 1.0*bassRel", "min": 0, "max": 10 },
+    "glow": { "type": "float", "default": "1.0 + 0.6*beatPulse + 0.5*highHit", "min": 0.1, "max": 4 },
+    "pulse": { "type": "float", "default": "0.8 + 0.5*bassHit", "min": 0, "max": 3,
               "description": "Brightness waves running down the tunnel." }
   }
 }

@@ -5,10 +5,16 @@
   "tags": ["utility", "text"],
   "energyRange": [0, 1],
   "cost": "low",
-  "description": "Draws the lyric layer over the scene. uAmount selects the style: 0 wavy sine (the Amiga scroller look), 1 beat slam, 2 soft fade, 3 horizontal scroll.",
+  "description": "Draws the lyric layer over the scene. uAmount selects the style: 0 wavy sine (the Amiga scroller look), 1 beat slam, 2 soft fade, 3 horizontal scroll, 4 karaoke word wipe, 5 word-per-beat cascade, 6 spectrum ride, 7 beat shockwave, 8 per-word drift, 9 transient shatter. Director.BuildTexts picks which, from the section's tempo, spectral balance and how fast its words arrive.",
   "shader": "shader.frag",
   "params": {
     "cue": { "type": "float", "default": "cueT",
-            "description": "0..1 through the current line's lifetime; supplied by the renderer." }
+            "description": "0..1 through the current line's lifetime; supplied by the renderer." },
+    "beats": { "type": "float", "default": "cueBeats",
+            "description": "Beats of the tracked grid since this line started. What the word-per-beat styles step on." },
+    "span": { "type": "float", "default": "cueSpan",
+            "description": "The whole line's length in beats, so a per-word style can fit its steps inside the line. 0 when nothing is supplying cue timing." },
+    "ids": { "type": "float", "default": "cueIds",
+            "description": "1 when the text raster carries per-word ids in its colour channels. 0 for a plain white raster, where every pixel reads as the first word." }
   }
 }

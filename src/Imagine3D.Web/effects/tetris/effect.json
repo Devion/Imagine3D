@@ -14,15 +14,15 @@
   "params": {
     "cell": { "type": "float", "default": "5.0", "min": 2, "max": 10,
              "description": "Blocks across each wall of the shaft. Low is chunky and close, high is a fine mesh." },
-    "fall": { "type": "float", "default": "1.6 + 2.6*energy", "min": 0, "max": 10,
+    "fall": { "type": "float", "default": "1.6 + 2.6*energy + 0.8*bassRel", "min": 0, "max": 10,
              "description": "How fast the shaft flies past. Negative reads as falling into it." },
     "gaps": { "type": "float", "default": "0.16", "min": 0, "max": 0.7,
              "description": "Fraction of pieces left out, so the wall has holes in it instead of being solid." },
     "bevel": { "type": "float", "default": "0.16", "min": 0, "max": 0.45 },
     "drift": { "type": "float", "default": "0.12", "min": 0, "max": 0.5,
               "description": "How far the shaft axis wanders off the middle of the frame." },
-    "roll": { "type": "float", "default": "0.05 + 0.08*energy", "min": -1, "max": 1 },
-    "glow": { "type": "float", "default": "1.0", "min": 0, "max": 2.5 },
+    "roll": { "type": "float", "default": "0.05 + 0.08*energy + 0.06*midRel", "min": -1, "max": 1 },
+    "glow": { "type": "float", "default": "0.8 + 0.5*highHit", "min": 0, "max": 2.5 },
     "seed": { "type": "float", "default": "0.0", "min": 0, "max": 100,
              "description": "Shifts which pieces land where." }
   }

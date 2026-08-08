@@ -1,5 +1,6 @@
 #include "common.glsl"
 #include "palette.glsl"
+#include "panel.glsl"
 
 // Summed circular wavefronts. Each "drop" is a decaying radial sine; the surface
 // normal comes from the analytic gradient, which is what lets the highlights be
@@ -25,8 +26,16 @@ void main() {
     vec2 d = uv - c;
     float r = length(d) + 1e-4;
 
+    // Each drop is tuned to its own band, so what strikes the surface is
+    // whatever is playing in that part of the mix. A hi-hat pattern ripples in
+    // the fine drops while the kick drives the broad ones, which is a surface
+    // being played rather than a surface being turned up.
+    float bandX = fi / max(1.0, float(n - 1));
+    float band = spectrumNow(bandX);
+    float strike = spectrumHit(bandX);
+
     float phase = r * 14.0 - age * 7.0;
-    float envelope = exp(-r * 1.9) * exp(-age * 0.85);
+    float envelope = exp(-r * 1.9) * exp(-age * 0.85) * (0.45 + 0.85 * band + 0.50 * strike);
 
     height += sin(phase) * envelope;
     grad += (d / r) * cos(phase) * 14.0 * envelope;

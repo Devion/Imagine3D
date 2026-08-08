@@ -1,6 +1,7 @@
 #include "common.glsl"
 #include "noise.glsl"
 #include "palette.glsl"
+#include "panel.glsl"
 
 // Vector balls, opened out into a corridor.
 //
@@ -69,13 +70,21 @@ void main() {
     // and the corkscrew would jitter once per pitch.
     float id = floor(travel / PITCH) + fk;
 
+    // Each ring answers a different part of the spectrum: the one in your face
+    // is the low end, the vanishing point is the top. The corridor becomes an
+    // analyser you fly down rather than one formation pumping on the beat, and
+    // because the band is taken from the ring's *place* in the stack rather
+    // than its identity, the reading holds still while the rings scroll past.
+    float bandX = rings > 1.0 ? fk / (rings - 1.0) : 0.0;
+    float band = spectrumNow(bandX);
+
     float scale = 2.0 / z;
-    float ringR = open * (0.85 + 0.35 * sin(id * 0.41));
+    float ringR = open * (0.85 + 0.35 * sin(id * 0.41)) * (0.86 + 0.28 * band);
     float roll = spin * 0.6 + id * p_twist;
 
     // A ring whose whole projected disc misses this pixel cannot contain the
     // ball that covers it. One length() throws out the rest of the ring.
-    float ballR = p_radius * scale;
+    float ballR = p_radius * scale * (0.72 + 0.55 * band);
     if (abs(rad - ringR * scale) > ballR + 1e-3) continue;
 
     for (int i = 0; i < 20; i++) {

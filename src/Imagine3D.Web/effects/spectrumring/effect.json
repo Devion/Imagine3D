@@ -30,8 +30,8 @@
               "description": "How far the tunnel axis wanders off the middle of the frame." },
     "core": { "type": "float", "default": "1.0", "min": 0, "max": 3,
              "description": "Light down the throat everything converges on." },
-    "detail": { "type": "float", "default": "0.30", "min": 0, "max": 1,
+    "detail": { "type": "float", "default": "0.22 + 0.20*airHit", "min": 0, "max": 1,
                "description": "Per-bar deviation from the six-point curve, scaled by onset." },
-    "glow": { "type": "float", "default": "1.0 + 0.6*beatPulse", "min": 0, "max": 3 }
+    "glow": { "type": "float", "default": "1.0 + 0.5*beatPulse + 0.4*highHit", "min": 0, "max": 3 }
   }
 }

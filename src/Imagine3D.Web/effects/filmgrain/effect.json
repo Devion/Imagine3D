@@ -9,8 +9,8 @@
   "description": "Animated grain, vignette and a gentle gate weave. Takes the digital edge off a shader-perfect frame.",
   "shader": "shader.frag",
   "params": {
-    "grain": { "type": "float", "default": "0.055", "min": 0, "max": 0.3 },
-    "vignette": { "type": "float", "default": "0.45", "min": 0, "max": 1.5 },
+    "grain": { "type": "float", "default": "0.035 + 0.050*airHit", "min": 0, "max": 0.3 },
+    "vignette": { "type": "float", "default": "0.40 + 0.15*(1.0 - brightness)", "min": 0, "max": 1.5 },
     "weave": { "type": "float", "default": "0.0008", "min": 0, "max": 0.01 },
     "lift": { "type": "float", "default": "0.012", "min": 0, "max": 0.1 }
   }

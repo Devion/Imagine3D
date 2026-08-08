@@ -12,12 +12,12 @@
   "description": "Doom-style rising fire built from advected fBm, drawn as three ridges at three depths under lit smoke — a near wall of flame against the lens, a middle front and a far one burning on the horizon. Flares up on the kick.",
   "shader": "shader.frag",
   "params": {
-    "height": { "type": "float", "default": "1.05 + 0.35*bass + 0.2*beatPulse", "min": 0.1, "max": 2.5,
+    "height": { "type": "float", "default": "1.05 + 0.35*bass + 0.20*bassHit", "min": 0.1, "max": 2.5,
                "description": "How far the nearest front reaches up the frame. The others are scaled down from it." },
     "stack": { "type": "float", "default": "1.0", "min": 0, "max": 2,
               "description": "How far apart the three fuel lines sit. 0 stacks them all on the bottom edge and the depth collapses." },
-    "speed": { "type": "float", "default": "1.1 + 0.8*energy", "min": 0.1, "max": 4 },
-    "turbulence": { "type": "float", "default": "2.2", "min": 0.5, "max": 6 },
+    "speed": { "type": "float", "default": "1.1 + 0.8*energy + 0.4*midRel", "min": 0.1, "max": 4 },
+    "turbulence": { "type": "float", "default": "1.8 + 1.0*lowMidRel", "min": 0.5, "max": 6 },
     "detail": { "type": "float", "default": "5.0", "min": 1, "max": 8 }
   }
 }

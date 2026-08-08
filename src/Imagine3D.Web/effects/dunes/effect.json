@@ -14,13 +14,13 @@
   "shader": "shader.frag",
   "params": {
     "speed": { "type": "float", "default": "0.5 + 0.6*energy", "min": 0, "max": 3 },
-    "relief": { "type": "float", "default": "1.0 + 0.3*bass", "min": 0.2, "max": 2.5,
+    "relief": { "type": "float", "default": "1.0 + 0.3*bass + 0.25*subRel", "min": 0.2, "max": 2.5,
                "description": "Height of the dunes. Past about 1.6 the slip faces start to overhang the march." },
-    "ripples": { "type": "float", "default": "1.0 + 0.8*high", "min": 0, "max": 3,
+    "ripples": { "type": "float", "default": "0.9 + 0.8*high + 0.6*airHit", "min": 0, "max": 3,
                 "description": "Wind ripples crawling across the sand." },
-    "haze": { "type": "float", "default": "1.0", "min": 0, "max": 4,
+    "haze": { "type": "float", "default": "0.8 + 0.4*lowMidRel", "min": 0, "max": 4,
              "description": "Distance haze — how far into the field you can see." },
-    "sun": { "type": "float", "default": "0.35 + 0.25*rms", "min": 0, "max": 1,
+    "sun": { "type": "float", "default": "0.35 + 0.25*rms + 0.20*brightness", "min": 0, "max": 1,
             "description": "Sun height. Low is long shadows; high flattens the field out." },
     "steps": { "type": "float", "default": "90.0", "min": 30, "max": 160 }
   }

@@ -1,5 +1,6 @@
 #include "common.glsl"
 #include "palette.glsl"
+#include "panel.glsl"
 
 // Interference between ring sources, in space rather than on a plane.
 //
@@ -46,10 +47,14 @@ void main() {
   vec3 s3 = vec3(cos(t * 0.47 + 4.0) * sep * 1.4, sin(t * 0.63 + 1.0) * sep * 1.4,
                  2.6 + sweep * sin(t * 0.29 + 4.2));
 
+  // Each source is tuned to a different part of the spectrum. Ring spacing is
+  // what the interference pattern is made of, so driving the three separately
+  // means the music moves the *pattern* — the beat frequency between them
+  // changes — rather than just brightening a fixed one.
   float freq = p_frequency;
-  float r1 = ringPhase(uv, s1, freq);
-  float r2 = ringPhase(uv, s2, freq);
-  float r3 = ringPhase(uv, s3, freq * 0.62);
+  float r1 = ringPhase(uv, s1, freq * (0.72 + 0.55 * spectrumNow(0.12)));
+  float r2 = ringPhase(uv, s2, freq * (0.72 + 0.55 * spectrumNow(0.50)));
+  float r3 = ringPhase(uv, s3, freq * 0.62 * (0.72 + 0.55 * spectrumNow(0.88)));
 
   float a = sin(r1);
   float b = sin(r2);

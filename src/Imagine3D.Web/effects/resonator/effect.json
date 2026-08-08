@@ -23,12 +23,12 @@
              "description": "Rotation of the whole barrel." },
     "ring": { "type": "float", "default": "2.4 + 1.6*energy", "min": 0, "max": 12,
              "description": "Vibration rate. Higher modes ring faster than lower ones whatever this is set to, which is the part that matters." },
-    "swing": { "type": "float", "default": "1.0 + 0.4*rms", "min": 0, "max": 2,
+    "swing": { "type": "float", "default": "1.0 + 0.4*rms + 0.3*midHit", "min": 0, "max": 2,
               "description": "Amplitude, as a fraction of the gap to the next string — so a loud band can never swing one string through its neighbour." },
     "gauge": { "type": "float", "default": "1.0", "min": 0.3, "max": 4,
               "description": "String thickness. Bass strings are drawn heavier than treble ones at any setting." },
     "drift": { "type": "float", "default": "0.10", "min": 0, "max": 0.6,
               "description": "How far the barrel axis wanders off the middle of the frame." },
-    "glow": { "type": "float", "default": "1.0 + 0.4*beatPulse", "min": 0, "max": 3 }
+    "glow": { "type": "float", "default": "1.0 + 0.4*beatPulse + 0.3*highHit", "min": 0, "max": 3 }
   }
 }

@@ -14,13 +14,13 @@
   "description": "One of the project's images torn into bands and thrown sideways on the transients, with the odd band dropping out to the palette. Settles between hits rather than running continuously, so it reads as the picture being struck.",
   "shader": "shader.frag",
   "params": {
-    "shatter": { "type": "float", "default": "0.35*beatPulse + 0.65*onset", "min": 0, "max": 1.5,
+    "shatter": { "type": "float", "default": "0.30*beatPulse + 0.55*onset + 0.35*highHit", "min": 0, "max": 1.5,
                  "description": "How hard the picture is coming apart right now." },
-    "tear":    { "type": "float", "default": "0.22", "min": 0, "max": 1,
+    "tear":    { "type": "float", "default": "0.16 + 0.15*highRel", "min": 0, "max": 1,
                  "description": "How far a band can travel, in frame widths." },
     "zoom":    { "type": "float", "default": "1.08 + 0.06*beatPulse", "min": 0.5, "max": 3 },
     "drift":   { "type": "float", "default": "0.02", "min": 0, "max": 0.3 },
-    "warp":    { "type": "float", "default": "0.6*beatPulse", "min": 0, "max": 3 },
-    "tone":    { "type": "float", "default": "0.4 + 0.2*rms", "min": 0, "max": 1 }
+    "warp":    { "type": "float", "default": "0.5*beatPulse + 0.4*bassHit", "min": 0, "max": 3 },
+    "tone":    { "type": "float", "default": "0.35 + 0.2*rms + 0.2*brightness", "min": 0, "max": 1 }
   }
 }

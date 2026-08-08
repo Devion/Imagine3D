@@ -12,11 +12,11 @@
   "description": "Colourful raymarched fBm cloudscape lit from within. Slow, wide and expensive — for intros, breakdowns and outros.",
   "shader": "shader.frag",
   "params": {
-    "density": { "type": "float", "default": "0.5 + 0.25*rms", "min": 0.05, "max": 2 },
+    "density": { "type": "float", "default": "0.5 + 0.25*rms + 0.20*lowMidRel", "min": 0.05, "max": 2 },
     "speed": { "type": "float", "default": "0.12 + 0.15*energy", "min": 0, "max": 1 },
     "steps": { "type": "float", "default": "42.0", "min": 12, "max": 96 },
-    "glow": { "type": "float", "default": "0.6 + 0.5*bass", "min": 0, "max": 3 },
-    "drift": { "type": "float", "default": "1.6 + 2.2*energy", "min": 0, "max": 8,
+    "glow": { "type": "float", "default": "0.6 + 0.5*bass + 0.4*brightness", "min": 0, "max": 3 },
+    "drift": { "type": "float", "default": "1.6 + 2.2*energy + 0.8*midRel", "min": 0, "max": 8,
               "description": "How fast the camera flies through the bank. 0 hovers, which is what this used to do." }
   }
 }

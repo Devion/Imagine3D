@@ -11,11 +11,11 @@
   "description": "A coordinate melted through forty passes of accumulating sine displacement. Liquid, slow and slightly seasick - the 70s light-show end of the library.",
   "shader": "shader.frag",
   "params": {
-    "speed": { "type": "float", "default": "2.4 + 1.6*rms", "min": 0.1, "max": 4.0,
+    "speed": { "type": "float", "default": "2.0 + 1.4*rms + 0.5*brightness", "min": 0.1, "max": 4.0,
               "description": "Rate of the melt." },
     "passes": { "type": "float", "default": "40.0", "min": 4.0, "max": 60.0,
                "description": "Displacement iterations. Fewer reads as ripples, more as full liquefaction." },
-    "swirl": { "type": "float", "default": "1.0 + 0.35*lowMid", "min": 0.0, "max": 2.5,
+    "swirl": { "type": "float", "default": "1.0 + 0.35*lowMid + 0.30*midRel", "min": 0.0, "max": 2.5,
               "description": "Strength of the per-pass displacement." },
     "vignette": { "type": "float", "default": "5.0", "min": 0.0, "max": 12.0,
                  "description": "How hard the frame darkens at the edges." }

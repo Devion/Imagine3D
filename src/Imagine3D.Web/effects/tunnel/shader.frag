@@ -1,6 +1,7 @@
 #include "common.glsl"
 #include "noise.glsl"
 #include "palette.glsl"
+#include "panel.glsl"
 
 // Polar tunnel: 1/r is depth, angle is the wrap around the wall. The whole trick
 // is that no geometry exists - it is a coordinate transform, and everything
@@ -68,16 +69,25 @@ void main() {
   // A few lanes running the length of the corridor. These are what give the eye
   // a line to travel along, and they converge on the vanishing point for free.
   float lanes = max(2.0, floor(p_strips + 0.5));
-  float lane = fract(angle / TAU * lanes + 0.5);
+  float laneCoord = angle / TAU * lanes + 0.5;
+  float lane = fract(laneCoord);
+  // Each strip is wired to its own band, so the lanes running the length of the
+  // corridor read the spectrum around the wall. Walking the eye down a lane then
+  // means watching one part of the mix, and the wall as a whole shows the shape
+  // of the arrangement rather than its volume.
+  float laneBand = spectrumNow(fract(floor(laneCoord) / lanes));
   float strip = exp(-abs(lane - 0.5) * 46.0);
-  col += pal(fract(f + 0.35)) * strip * (0.55 + 0.85 * uMid) * p_glow;
+  col += pal(fract(f + 0.35)) * strip * (0.35 + 0.75 * uMid + 0.85 * laneBand) * p_glow;
 
   // --- rings passing -------------------------------------------------------
   // Light hoops set into the corridor at a fixed spacing. They come at the
   // camera because they are fixed in z, and they flare on the bar.
+  // Consecutive hoops step through the spectrum, so what arrives at the camera
+  // is a reading of the mix travelling toward you rather than a metronome.
   float zr = abs(fract(z * 0.5) - 0.5);
+  float ringBand = spectrumNow(fract(floor(z * 0.5) / 6.0));
   float ring = exp(-zr * 26.0);
-  col += pal(fract(f + 0.7)) * ring * (0.45 + 1.1 * uBarPulse) * p_glow;
+  col += pal(fract(f + 0.7)) * ring * (0.35 + 0.95 * uBarPulse + 0.75 * ringBand) * p_glow;
 
   // --- sparks --------------------------------------------------------------
   // Debris blowing down the tunnel. One hash per cell of a finer lattice, so
@@ -87,7 +97,10 @@ void main() {
   float spark = step(0.965, hash12(si))
               * exp(-length(fract(sg) - 0.5) * 7.0)
               * (0.5 + 0.5 * sin(hash12(si) * 90.0 + uTime * 20.0));
-  col += mix(vec3(1.0), pal(fract(f + 0.15)), 0.5) * spark * 1.4 * p_sparks;
+  // Debris catches the top end - it is the part of the mix that actually has
+  // the texture of grit blowing past.
+  col += mix(vec3(1.0), pal(fract(f + 0.15)), 0.5) * spark * 1.4 * p_sparks
+         * (0.45 + 0.85 * uAirHit + 0.45 * uAir);
 
   // --- depth ---------------------------------------------------------------
   // Near wall hot, far wall falling into the throat. The old version multiplied

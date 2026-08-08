@@ -12,10 +12,10 @@
   "description": "Sheets of falling water with foam streaks, rising mist and a churning splash pool. Flow rate and spray follow the track.",
   "shader": "shader.frag",
   "params": {
-    "flow": { "type": "float", "default": "2.6 + 2.0*energy", "min": 0.1, "max": 5 },
+    "flow": { "type": "float", "default": "2.6 + 2.0*energy + 0.6*bassRel", "min": 0.1, "max": 5 },
     "width": { "type": "float", "default": "0.62", "min": 0.1, "max": 1 },
-    "mist": { "type": "float", "default": "0.55 + 0.4*rms", "min": 0, "max": 2 },
-    "foam": { "type": "float", "default": "0.7 + 0.4*high", "min": 0, "max": 2 },
+    "mist": { "type": "float", "default": "0.55 + 0.4*rms + 0.3*airRel", "min": 0, "max": 2 },
+    "foam": { "type": "float", "default": "0.6 + 0.4*high + 0.4*airHit", "min": 0, "max": 2 },
     "pool": { "type": "float", "default": "0.26", "min": 0.05, "max": 0.6,
              "description": "Height of the splash pool from the bottom of the frame." }
   }

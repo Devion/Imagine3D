@@ -66,6 +66,7 @@ public sealed class AudioAnalyzer
         Report(0.70, "Measuring levels");
         var rms = BandEnergy.Rms(audio.Mono, spec);
         var bands = BandEnergy.Compute(spec);
+        var fineBands = BandEnergy.ComputeFine(spec);
 
         Report(0.80, "Finding structure");
         var (feats, featRate) = StructureAnalyzer.Mfcc(spec);
@@ -104,7 +105,8 @@ public sealed class AudioAnalyzer
             audio.Duration, audio.SampleRate, spec.FrameRate,
             bpm, confidence, tempo.Alternate, pinned,
             beats, downbeats, onsets, sections, lyricLines,
-            BandEnergy.Names, rms, bands, onsetEnv, lyricSource, lyricCoverage);
+            BandEnergy.Names, rms, bands, onsetEnv, lyricSource, lyricCoverage,
+            fineBands, BandEnergy.FineEdges);
 
         Report(1.0,
             $"{bpm:F1} BPM (confidence {analysis.BpmConfidence:P0}) - " +

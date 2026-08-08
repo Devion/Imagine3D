@@ -12,7 +12,7 @@
   "description": "Stars streaming outward through a nebula, with warp streaks that stretch as the track opens up and a core everything converges on. Flow is one-directional and only occasionally eases backwards.",
   "shader": "shader.frag",
   "params": {
-    "speed": { "type": "float", "default": "0.35 + 0.9*energy", "min": 0, "max": 4,
+    "speed": { "type": "float", "default": "0.35 + 0.9*energy + 0.3*subRel", "min": 0, "max": 4,
               "description": "Forward flow rate. Kept modest — this is travel, not a strobe." },
     "rollback": { "type": "float", "default": "0.25", "min": 0, "max": 1,
                  "description": "How far the flow eases backwards on its slow cycle. 0 never reverses; above ~0.5 it reverses for a noticeable stretch." },
@@ -21,14 +21,14 @@
     "density": { "type": "float", "default": "78.0", "min": 10, "max": 200 },
     "layers": { "type": "float", "default": "6.0", "min": 3, "max": 7,
                "description": "Depth shells of stars. More is a denser sky and a little more cost." },
-    "streak": { "type": "float", "default": "0.10 + 0.20*onset", "min": 0, "max": 1,
+    "streak": { "type": "float", "default": "0.10 + 0.15*onset + 0.20*highHit", "min": 0, "max": 1,
                "description": "Radial elongation of the stars themselves." },
     "warpLines": { "type": "float", "default": "0.85", "min": 0, "max": 2,
                   "description": "Long hyperspace trails over the top of the field. Their length rides the energy, so a chorus accelerates instead of merely brightening." },
-    "nebula": { "type": "float", "default": "1.0", "min": 0, "max": 2.5,
+    "nebula": { "type": "float", "default": "0.8 + 0.5*lowMidRel", "min": 0, "max": 2.5,
                "description": "The cloud the field flies through. 0 is the old black sky." },
-    "core": { "type": "float", "default": "1.0", "min": 0, "max": 3,
+    "core": { "type": "float", "default": "0.8 + 0.5*brightness", "min": 0, "max": 3,
              "description": "Glow at the vanishing point everything converges on." },
-    "warp": { "type": "float", "default": "0.15*barPulse*energy", "min": 0, "max": 1 }
+    "warp": { "type": "float", "default": "0.12*barPulse*energy + 0.10*bassHit", "min": 0, "max": 1 }
   }
 }

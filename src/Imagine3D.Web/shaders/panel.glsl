@@ -55,30 +55,37 @@ float glowLine(float d, float w, float spread, float aa) {
   return fill(d - w, max(aa, w * 0.6)) + exp(-max(0.0, d - w) / max(1e-4, spread)) * 0.85;
 }
 
-/// Six values read as one continuous curve over 0..1.
+/// A band array read as one continuous curve over 0..1.
 ///
-/// The analysis carries six band followers, not a spectrum, and every instrument
-/// here has to turn those into "how loud is the music a third of the way up the
-/// frame". Doing it in one place means they all answer that the same way — and
-/// it is monotone in its inputs, which is what lets a peak cap be drawn from the
-/// peak-hold followers and be guaranteed to land at or above its own bar.
-float bandCurve(float t, float a0, float a1, float a2, float a3, float a4, float a5) {
-  t = clamp(t, 0.0, 0.9999) * 5.0;
+/// Every instrument here has to turn the band followers into "how loud is the
+/// music a third of the way up the frame". Doing it in one place means they all
+/// answer that the same way — and it is monotone in its inputs, which is what
+/// lets a peak cap be drawn from the peak-hold followers and be guaranteed to
+/// land at or above its own bar.
+///
+/// The bands are geometrically spaced, so t is an octave axis rather than a
+/// linear frequency one: equal steps in t are equal musical intervals, and half
+/// the curve is not spent on the top two octaves where music has little but
+/// cymbals.
+float bandCurve(float t, float a[BAND_COUNT]) {
+  t = clamp(t, 0.0, 0.9999) * float(BAND_COUNT - 1);
   float k = smoothstep(0.0, 1.0, fract(t));
   int i = int(floor(t));
-  if (i == 0) return mix(a0, a1, k);
-  if (i == 1) return mix(a1, a2, k);
-  if (i == 2) return mix(a2, a3, k);
-  if (i == 3) return mix(a3, a4, k);
-  return mix(a4, a5, k);
+  return mix(a[i], a[min(i + 1, BAND_COUNT - 1)], k);
 }
 
-/// The spectrum now, from sub at 0 to air at 1.
-float spectrumNow(float t) {
-  return bandCurve(t, uSub, uBass, uLowMid, uMid, uHigh, uAir);
-}
+/// The spectrum now, from the lowest band at 0 to the highest at 1.
+float spectrumNow(float t) { return bandCurve(t, uBands); }
 
 /// The same curve on the peak-hold followers, so it never reads below spectrumNow().
-float spectrumPeak(float t) {
-  return bandCurve(t, uSubPeak, uBassPeak, uLowMidPeak, uMidPeak, uHighPeak, uAirPeak);
-}
+float spectrumPeak(float t) { return bandCurve(t, uBandPeaks); }
+
+/// Where the spectrum was just struck, rather than where it is loud. An effect
+/// drawn from this flickers along with the percussion instead of swelling with
+/// the mix.
+float spectrumHit(float t) { return bandCurve(t, uBandHits); }
+
+/// The shape of the spectrum: 0.5 is a band sitting at the average across all of
+/// them, above is leaning into this part of the range, below is leaning out of
+/// it. Independent of how loud the passage is.
+float spectrumRel(float t) { return bandCurve(t, uBandRel); }

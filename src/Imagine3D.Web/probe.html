@@ -35,6 +35,17 @@
   and the probe is the thing that is wrong. <code>BARELY MOVES</code> is the flag
   that is always worth acting on.
 </p>
+<p class="lead">
+  <b><code>cont</code> is how much of the picture survives one frame</b> — the
+  correlation between two frames 1/30 s apart. Near 1 the effect moved; near 0 it
+  was replaced, and an effect that replaces itself thirty times a second is not
+  fast, it is noise. That is what <span class="bad">STROBES</span> flags, and it
+  is the number to reach for when a video reads as obnoxious rather than as
+  energetic. It measures the effect's own rate: the modulation is held constant
+  across the pair, so what the <em>music</em> does to that rate is not in here.
+  How a whole plan paces against its song is a different question, and a slow
+  song is where it bites — see <code>Modulation.tempoPace</code>.
+</p>
 <button id="go">Run</button>
 <select id="kind">
   <option value="scene">scene effects</option>
@@ -65,6 +76,13 @@ const buf = new Uint8Array(W * H * 4);
 /// motion pair - a beat pulse decaying across the pair would show up as
 /// brightness change and be scored as movement.
 function mod(t) {
+  // Every spectral source an effect can read, at the level it typically sits at
+  // on real material (see the decorrelation report in Imagine3D.Tests). Missing
+  // any of them here does not fail loudly - the expression layer resolves an
+  // unknown name to 0 - it just measures the effect with part of its modulation
+  // turned off, and the coverage number that comes out is then wrong for the
+  // effect as it actually renders.
+  const fine = Array.from({ length: 12 }, (_, i) => 0.70 - 0.02 * i);
   return {
     t, sceneT: 0.5, sectionT: 0.5, clipT: 0,
     beat: (t * 2) % 1, bar: (t * 0.5) % 1, phrase: (t * 0.125) % 1,
@@ -72,7 +90,18 @@ function mod(t) {
     onset: 0.45, rms: 0.58, energy: 0.62, index: 0, rmsPeak: 0.72,
     sub: 0.66, bass: 0.71, lowMid: 0.58, mid: 0.52, high: 0.47, air: 0.38,
     subPeak: 0.78, bassPeak: 0.83, lowMidPeak: 0.70, midPeak: 0.64,
-    highPeak: 0.59, airPeak: 0.48, bands: {},
+    highPeak: 0.59, airPeak: 0.48,
+    subHit: 0.30, bassHit: 0.32, lowMidHit: 0.30, midHit: 0.29,
+    highHit: 0.31, airHit: 0.30,
+    subRel: 0.55, bassRel: 0.56, lowMidRel: 0.52, midRel: 0.50,
+    highRel: 0.52, airRel: 0.53,
+    brightness: 0.58,
+    bands: {},
+    bandArr: new Float32Array(fine),
+    bandPeakArr: new Float32Array(fine.map((v) => v + 0.10)),
+    bandRelArr: new Float32Array(12).fill(0.53),
+    bandHitArr: new Float32Array(12).fill(0.30),
+    ...Object.fromEntries(fine.map((v, i) => [`band${i}`, v])),
   };
 }
 
@@ -101,6 +130,33 @@ function coverage(l) {
   let mean = 0, lit = 0;
   for (const v of l) { mean += v; if (v > floor + 0.04) lit++; }
   return 0.6 * (lit / l.length) + 0.4 * (mean / l.length);
+}
+
+/// Correlation between two frames one *display* frame apart - can you still see
+/// the same picture, or has it been replaced?
+///
+/// Coverage and motion both say how much changed; neither says whether what
+/// arrived has anything to do with what left. An effect flashing its palette
+/// changes every pixel and reads as one continuous thing; an effect running fast
+/// enough to decorrelate changes the same pixels and reads as a strobe. Pearson
+/// is scale and offset free, so a palette cycle or a bloom swell does not count
+/// as the picture having been thrown away.
+///
+/// The modulation is frozen across the pair (see mod()), so this is the effect's
+/// own rate and nothing else - which is the question a per-effect probe can
+/// actually answer. What the music does to that rate is a property of a plan,
+/// not of an effect.
+function corr(a, b) {
+  const n = a.length;
+  let ma = 0, mb = 0;
+  for (let i = 0; i < n; i++) { ma += a[i]; mb += b[i]; }
+  ma /= n; mb /= n;
+  let sab = 0, saa = 0, sbb = 0;
+  for (let i = 0; i < n; i++) {
+    const x = a[i] - ma, y = b[i] - mb;
+    sab += x * y; saa += x * x; sbb += y * y;
+  }
+  return sab / Math.max(1e-9, Math.sqrt(saa * sbb));
 }
 
 const at = (f, x, y) => f[Math.max(0, Math.min(H - 1, Math.round(y))) * W
@@ -139,6 +195,7 @@ async function run() {
       const compiled = compileSceneParams(manifest, null);
 
       let cov = 0, covN = 0, change = 0, explained = 0, zoom = 0, sx = 0, sy = 0, mN = 0;
+      let cont = 0;
 
       for (const pal of ['frost', 'ember']) {
         const palette = getPalette(pal);
@@ -148,6 +205,8 @@ async function run() {
         const palette = getPalette('neon');
         const a = luma(inst, compiled, palette, t);
         const b = luma(inst, compiled, palette, t + 0.33);
+        // One frame at 30fps: the smallest step the video will ever take.
+        cont += corr(a, luma(inst, compiled, palette, t + 1 / 30));
         const base = residual(a, b, 1, 0, 0);
         let lo = base, lz = 1, ldx = 0, ldy = 0;
         for (const z of [0.90, 0.94, 0.97, 1.03, 1.06, 1.10, 1.16, 1.24]) {
@@ -163,7 +222,7 @@ async function run() {
       }
       inst.dispose();
 
-      cov /= covN; change /= mN; explained /= mN; zoom /= mN; sx /= mN; sy /= mN;
+      cov /= covN; change /= mN; explained /= mN; zoom /= mN; sx /= mN; sy /= mN; cont /= mN;
 
       const motion =
         change < 0.012 ? 'still'
@@ -182,11 +241,15 @@ async function run() {
         if (manifest.motion && manifest.motion !== motion)
           flags.push(`declares motion ${manifest.motion}`);
         if (change < 0.012) flags.push('BARELY MOVES');
+        // Nothing survives from one frame to the next: this is not motion, it
+        // is noise at 30 Hz, and it is what "obnoxiously fast" measures as.
+        if (cont < 0.35) flags.push('STROBES');
       }
 
       rows.push(
         `coverage ${cov.toFixed(2)}  ${motion.padEnd(9)} change ${change.toFixed(3)} ` +
         `explained ${(explained * 100).toFixed(0).padStart(3)}%  zoom ${zoom.toFixed(2)}  ` +
+        `cont ${cont.toFixed(2)}  ` +
         `${manifest.id.padEnd(16)} ${flags.join('; ')}`);
     } catch (err) {
       rows.push(`FAIL      ${manifest.id}: ${String(err.message).split('\n')[0]}`);

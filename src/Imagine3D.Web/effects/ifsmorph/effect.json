@@ -13,11 +13,11 @@
   "description": "A kaleidoscopic-IFS solid tumbling in space, morphing between four fold parameterisations on a slow cycle. Unlike the library's other fractals this one is a lit surface rather than accumulated glow — real normals, specular and Fresnel — with a flowing procedural texture on its faces.",
   "shader": "shader.frag",
   "params": {
-    "spin": { "type": "float", "default": "1.0 + 0.5*energy", "min": 0, "max": 3 },
-    "morph": { "type": "float", "default": "0.25", "min": 0, "max": 1.5,
+    "spin": { "type": "float", "default": "1.0 + 0.5*energy + 0.3*midRel", "min": 0, "max": 3 },
+    "morph": { "type": "float", "default": "0.18 + 0.15*brightness", "min": 0, "max": 1.5,
               "description": "Rate the fold parameters cycle between the four presets." },
-    "glow": { "type": "float", "default": "0.9 + 0.6*beatPulse", "min": 0, "max": 3 },
-    "flow": { "type": "float", "default": "0.8 + 0.5*mid", "min": 0, "max": 3,
+    "glow": { "type": "float", "default": "0.9 + 0.5*beatPulse + 0.5*highHit", "min": 0, "max": 3 },
+    "flow": { "type": "float", "default": "0.8 + 0.5*mid + 0.4*midRel", "min": 0, "max": 3,
              "description": "Speed of the curl texture running over the faces." },
     "steps": { "type": "float", "default": "96.0", "min": 40, "max": 160 }
   }

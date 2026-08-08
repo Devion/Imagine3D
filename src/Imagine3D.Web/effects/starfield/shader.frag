@@ -1,6 +1,7 @@
 #include "common.glsl"
 #include "noise.glsl"
 #include "palette.glsl"
+#include "panel.glsl"
 
 // Hyperspace: stars, warp streaks and the cloud they are flying through.
 //
@@ -108,6 +109,13 @@ void main() {
     if (i >= layers) break;
     float fi = float(i);
 
+    // Each shell reads a different part of the spectrum — the slow near layers
+    // the low end, the fast far ones the top. The whole sky brightening at once
+    // says only "it got louder"; layer by layer it says which instrument did.
+    float bandX = fi / float(layers - 1);
+    float band = spectrumNow(bandX);
+    float strike = spectrumHit(bandX);
+
     // Integer sector count so the lattice wraps cleanly at the seam.
     float sectors = floor(13.0 + fi * 8.0);
     float layerSpeed = 0.35 + fi * 0.28;
@@ -146,7 +154,7 @@ void main() {
     float d = length(vec2(dA, dW / stretch));
 
     float glow = 0.005 / (d + 0.005);
-    float star = pow(glow, 1.7) * (0.35 + bright * 0.8);
+    float star = pow(glow, 1.7) * (0.35 + bright * 0.8) * (0.55 + 0.85 * band + 0.55 * strike);
 
     // Fade in as a star is born at the centre and out only once it is past the
     // corner. centered() puts the corner at r ~2.0 on 16:9, so fading from 1.1

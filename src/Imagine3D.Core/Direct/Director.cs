@@ -176,7 +176,9 @@ public sealed class Director(EffectRegistry registry)
                 Locked: held is not null));
         }
 
-        var texts = BuildTexts(analysis, sections);
+        // Its own RNG stream, like the cast and the image placer: which treatment
+        // the lyrics get must not shift every scene pick that follows it.
+        var texts = BuildTexts(analysis, sections, new Random(settings.Seed ^ 0x7E47));
         var built = scenes.ToArray();
 
         // Downbeats where the grid can be trusted, beats otherwise, nothing if
@@ -761,8 +763,35 @@ public sealed class Director(EffectRegistry registry)
 
     /// Lyric lines become on-screen text. Markers are stage directions, not lyrics,
     /// so they are never drawn.
-    static TextCue[] BuildTexts(AudioAnalysis analysis, Section[] sections)
+    ///
+    /// Which treatment a line gets is a musical question rather than a cosmetic
+    /// one, and the treatments make different demands: a word-per-beat cascade
+    /// needs a beat grid worth stepping on, a shockwave needs something in the
+    /// bass to be the wave, a karaoke wipe needs the line to last long enough for
+    /// the wipe to be a wipe and not a flash. So the pool a section draws from is
+    /// built from its tempo, its spectral balance and how fast its words actually
+    /// arrive - and every line in the section is then treated the same way, because
+    /// a style that changes line to line reads as a fault, not as an idea.
+    static TextCue[] BuildTexts(AudioAnalysis analysis, Section[] sections, Random rng)
     {
+        // One style per section, chosen before any line is placed so that a section
+        // with two lines and a section with twenty are decided the same way.
+        var styleFor = new Dictionary<int, string>();
+        string last = "";
+        foreach (var sec in sections)
+        {
+            var pool = StylePool(analysis, sec);
+
+            // Two sections running on the same treatment reads as the director
+            // having had one idea, so the repeat is only taken when the section
+            // genuinely has nothing else that fits it.
+            var choices = pool.Where(s => s != last).ToArray();
+            if (choices.Length == 0) choices = pool;
+
+            last = Draw(choices, rng);
+            styleFor[sec.Index] = last;
+        }
+
         var cues = new List<TextCue>();
         foreach (var l in analysis.Lyrics)
         {
@@ -770,15 +799,121 @@ public sealed class Director(EffectRegistry registry)
             if (string.IsNullOrWhiteSpace(l.Text)) continue;
 
             var sec = sections.FirstOrDefault(s => l.Start >= s.Start && l.Start < s.End);
-            string style = sec is null ? "wave"
-                : sec.Energy > 0.7 ? "slam"
-                : sec.Energy < 0.35 ? "fade"
-                : "wave";
+            string style = sec is not null && styleFor.TryGetValue(sec.Index, out var s) ? s : "wave";
 
             // Hold each line a beat longer than its slot so it is readable.
-            cues.Add(new TextCue(l.Start, Math.Min(analysis.Duration, l.End + 0.4), l.Text, style));
+            double end = Math.Min(analysis.Duration, l.End + 0.4);
+            cues.Add(new TextCue(l.Start, end, l.Text, FitStyle(style, end - l.Start, l.Text)));
         }
         return cues.ToArray();
+    }
+
+    /// Draw from a best-first pool, weighted 1/(1+i).
+    ///
+    /// A uniform draw over the pool says every treatment that *can* go on a
+    /// section is as right for it as every other, which is exactly what the pool
+    /// was built to deny - and it left the wipe, the one treatment that never
+    /// moves a letter, on one lyric line in twenty. This leaves the treatment
+    /// that actually suits the section carrying it about twice as often as the
+    /// next one down, without ever locking the rest out.
+    static string Draw(string[] pool, Random rng)
+    {
+        double total = 0;
+        for (int i = 0; i < pool.Length; i++) total += 1.0 / (1 + i);
+
+        double r = rng.NextDouble() * total;
+        for (int i = 0; i < pool.Length; i++)
+        {
+            r -= 1.0 / (1 + i);
+            if (r <= 0) return pool[i];
+        }
+        return pool[^1];
+    }
+
+    /// The lyric treatments that suit one section, best first - Draw() reads the
+    /// order as a ranking, so a pool that is merely "everything allowed here" in
+    /// arbitrary order is a bug, not a shortcut. Never empty.
+    static string[] StylePool(AudioAnalysis analysis, Section sec)
+    {
+        double bpm = analysis.Bpm > 1 ? analysis.Bpm : 120;
+        bool grid = analysis.BeatGridReliable;
+        var (bass, treble) = SectionTilt(analysis, sec);
+
+        // Scale-free, for the same reason DerivePalette works this way: every band
+        // is normalised to its own range, so their absolute levels all sit around
+        // the same number and only the ratio between them says anything.
+        double tilt = treble / Math.Max(0.05, bass);
+
+        // Lines per second. A section firing a line every two seconds cannot afford
+        // a treatment that spends half a line arriving.
+        double rate = sec.Duration > 0.5 ? sec.Lyrics.Length / sec.Duration : 0;
+
+        var pool = new List<string>();
+        if (sec.Energy >= 0.62)
+        {
+            // Loud. Something has to hit, and what the section is made of decides
+            // which: the wave needs a body in the bass to be a wave, the tear
+            // needs transients up top to be a tear. Where the mix says neither,
+            // the tempo does - and the slam is what is left when nothing else has
+            // a reason, which is the job it has always actually had.
+            if (tilt < 0.95) pool.Add("shockwave");
+            if (tilt > 1.10) pool.Add("shatter");
+            if (grid && bpm >= 112) pool.Add("cascade");
+            pool.Add("slam");
+        }
+        else if (sec.Energy >= 0.38)
+        {
+            // The body of most songs, and where the words matter most - so the
+            // default here is the one treatment that never moves the letters.
+            pool.Add("karaoke");
+            if (tilt > 1.0) pool.Add("spectrum");
+            pool.Add("wave");
+            if (grid && bpm >= 126 && rate < 0.35) pool.Add("cascade");
+            if (tilt < 0.9) pool.Add("shockwave");
+        }
+        else
+        {
+            pool.Add("drift");
+            pool.Add("fade");
+            if (rate < 0.25) pool.Add("karaoke");     // sparse, slow lines: room to wipe
+            if (tilt > 1.15) pool.Add("spectrum");
+        }
+
+        return pool.Distinct().ToArray();
+    }
+
+    /// Mean level of the two lowest and the two highest bands across one section.
+    static (double Bass, double Treble) SectionTilt(AudioAnalysis analysis, Section sec)
+    {
+        if (analysis.Bands.Length < 6 || analysis.FrameRate <= 0) return (0.5, 0.5);
+
+        double Mean(int band)
+        {
+            var a = analysis.Bands[band];
+            if (a.Length == 0) return 0;
+            int from = Math.Clamp((int)(sec.Start * analysis.FrameRate), 0, a.Length - 1);
+            int to = Math.Clamp((int)(sec.End * analysis.FrameRate), from + 1, a.Length);
+            double sum = 0;
+            for (int i = from; i < to; i++) sum += a[i];
+            return sum / (to - from);
+        }
+
+        return (Mean(0) + Mean(1), Mean(4) + Mean(5));
+    }
+
+    /// Downgrade a treatment the line has no room for.
+    ///
+    /// The section chose on how the music behaves over half a minute; a single
+    /// line can still be a two-word shout inside it. A wipe across half a second
+    /// is a flash rather than a wipe, and a cascade whose words are due after the
+    /// line has gone simply never shows them.
+    static string FitStyle(string style, double seconds, string text)
+    {
+        int words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+        if (style == "karaoke" && (seconds < 1.5 || words < 3)) return "wave";
+        if (style == "cascade" && (seconds < 1.5 || words < 2)) return "slam";
+        if (style == "drift" && seconds < 1.2) return "fade";
+        return style;
     }
 
     /// Pick a palette from the song's spectral balance and how loud it runs.

@@ -14,12 +14,12 @@
   "description": "Flight through an infinite lattice of star clusters. Space is folded into a repeating tile and each sample is run through an inversion fractal; what is accumulated is the total change in orbit radius, which spikes into points of light. Volumetric, so the clusters pass through one another as you fly.",
   "shader": "shader.frag",
   "params": {
-    "speed": { "type": "float", "default": "0.50 + 0.45*energy", "min": 0, "max": 4 },
-    "zoom": { "type": "float", "default": "0.8", "min": 0.2, "max": 2 },
+    "speed": { "type": "float", "default": "0.50 + 0.45*energy + 0.25*midRel", "min": 0, "max": 4 },
+    "zoom": { "type": "float", "default": "0.7 + 0.25*brightness", "min": 0.2, "max": 2 },
     "tile": { "type": "float", "default": "0.85", "min": 0.2, "max": 2,
              "description": "Size of the repeating fold. Small values pack the clusters tighter." },
-    "bright": { "type": "float", "default": "1.0 + 0.6*rms", "min": 0, "max": 3 },
-    "darkmatter": { "type": "float", "default": "0.3", "min": 0, "max": 1,
+    "bright": { "type": "float", "default": "1.0 + 0.5*rms + 0.4*airHit", "min": 0, "max": 3 },
+    "darkmatter": { "type": "float", "default": "0.22 + 0.20*lowMidRel", "min": 0, "max": 1,
                    "description": "Occlusion by the dense regions, which is what stops the far field washing out flat." },
     "steps": { "type": "float", "default": "20.0", "min": 8, "max": 32 },
     "folds": { "type": "float", "default": "17.0", "min": 6, "max": 24 }

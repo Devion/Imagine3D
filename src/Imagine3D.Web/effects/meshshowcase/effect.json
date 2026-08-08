@@ -18,14 +18,14 @@
               "description": "Spacing down the corridor. Small values pack the swarm and hide the fog; large ones spread it out." },
     "radius": { "type": "float", "default": "1.5", "min": 0, "max": 5,
                "description": "How far off the view axis the helix swings. 0 puts every copy dead centre and they queue up in a line." },
-    "flow": { "type": "float", "default": "1.2 + 2.0*energy", "min": -8, "max": 8,
+    "flow": { "type": "float", "default": "1.2 + 2.0*energy + 0.6*bassRel", "min": -8, "max": 8,
              "description": "How fast the swarm comes at the camera. Negative sends it away." },
-    "swirl": { "type": "float", "default": "0.25", "min": -2, "max": 2,
+    "swirl": { "type": "float", "default": "0.18 + 0.20*midRel", "min": -2, "max": 2,
               "description": "Rotation of the whole helix about the view axis." },
-    "spin": { "type": "float", "default": "0.35 + 0.3*energy", "min": -3, "max": 3,
+    "spin": { "type": "float", "default": "0.35 + 0.3*energy + 0.2*midRel", "min": -3, "max": 3,
              "description": "Each copy's own spin. Rates vary per copy, so they never turn in unison." },
     "tilt": { "type": "float", "default": "0.25", "min": -1.2, "max": 1.2 },
-    "rim": { "type": "float", "default": "0.8 + 0.7*high", "min": 0, "max": 3 },
+    "rim": { "type": "float", "default": "0.8 + 0.5*high + 0.5*airHit", "min": 0, "max": 3 },
     "wire": { "type": "float", "default": "0.0", "min": 0, "max": 1,
              "description": "1 draws the models as glowing wireframe-ish facets instead of solid." }
   }

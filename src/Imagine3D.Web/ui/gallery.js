@@ -29,6 +29,7 @@ import { EffectRegistry, defaultParams } from '../engine/registry.js';
 import { compileParams, evalParams } from '../engine/expr.js';
 import { getPalette, PALETTE_NAMES } from '../engine/palettes.js';
 import { Modulation } from '../engine/modulation.js';
+import { drawLyricRaster } from '../engine/textlayer.js';
 
 const CELL_W = 320, CELL_H = 180;
 
@@ -44,6 +45,12 @@ const WIPE_PERIOD = 3.2;
 /// When there is no analysed project to drive from. Not silence - a plain 4/4 at
 /// a club tempo, so an effect still shows itself being driven.
 const FALLBACK_BPM = 124;
+
+/// textcomposite is ten different treatments behind one uAmount, so its card
+/// steps through them: this long on each, and one lyric lifetime per step, so a
+/// style that opens or closes on the line is seen doing it.
+const LYRIC_STYLES = 10;
+const LYRIC_STEP = 4.0;
 
 export class Gallery {
   constructor(root, { onStatus = () => {}, onProgress = null } = {}) {
@@ -96,13 +103,18 @@ export class Gallery {
 
   // ---------------------------------------------------------------- textures
 
-  uploadCanvas(c) {
+  /// `premultiply` matters only for a canvas that has transparency in it - the
+  /// lyric raster. See the upload in engine/textlayer.js for why that one cannot
+  /// go up any other way.
+  uploadCanvas(c, premultiply = false) {
     const gl = this.gl;
     const tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, premultiply);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -164,15 +176,15 @@ export class Gallery {
     return this.uploadCanvas(c);
   }
 
+  /// Drawn by the renderer's own rasteriser, ids and all. A plain white sample
+  /// line would preview a different shader: half of textcomposite's styles
+  /// address the words individually and would fall back to treating the line as
+  /// one word - which is exactly the look they were written to replace.
   textTexture() {
     const c = document.createElement('canvas');
     c.width = CELL_W; c.height = CELL_H;
-    const ctx = c.getContext('2d');
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 28px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('LYRIC LINE', CELL_W / 2, CELL_H * 0.78);
-    return this.uploadCanvas(c);
+    drawLyricRaster(c.getContext('2d'), 'every word on time', CELL_W, CELL_H);
+    return this.uploadCanvas(c, true);
   }
 
   // ---------------------------------------------------------------- the clock
@@ -207,7 +219,7 @@ export class Gallery {
   modAt(t) {
     if (this.mod) {
       const start = Math.floor(t / SCENE_SPAN) * SCENE_SPAN;
-      return this.mod.at(t, { start, end: start + SCENE_SPAN });
+      return this.mod.at(t, { start, end: start + SCENE_SPAN }, this.lyricCue(t));
     }
 
     const period = 60 / FALLBACK_BPM;
@@ -216,7 +228,8 @@ export class Gallery {
     const pulse = Math.exp(-(beat * period) * 7);
     const swell = 0.5 + 0.5 * Math.sin(t * 0.3);
     return {
-      t, sceneT: (t % SCENE_SPAN) / SCENE_SPAN, sectionT: (t % 40) / 40, clipT: 0.5, cueT: 0.5,
+      t, sceneT: (t % SCENE_SPAN) / SCENE_SPAN, sectionT: (t % 40) / 40, clipT: 0.5,
+      ...this.lyricCue(t),
       beat, bar, phrase: (t % (period * 16)) / (period * 16),
       beatPulse: pulse, barPulse: Math.exp(-(bar * period * 4) * 2.5), beatStrength: 0.85,
       onset: pulse * 0.7, rms: 0.45 + 0.25 * swell, energy: 0.55 + 0.2 * swell, index: 0,
@@ -227,6 +240,15 @@ export class Gallery {
       subPeak: 0.8, bassPeak: 0.85, lowMidPeak: 0.7, midPeak: 0.68, highPeak: 0.6, airPeak: 0.55,
       bands: {},
     };
+  }
+
+  /// The lyric cue the text styles are shown against: one whole line lifetime
+  /// per style step, and the line's length in beats so the word-per-beat styles
+  /// have a grid to step on rather than sitting at the end of their own timing.
+  lyricCue(t) {
+    const k = (t % LYRIC_STEP) / LYRIC_STEP;
+    const beats = LYRIC_STEP / (60 / this.bpm);
+    return { cueT: k, cueBeats: k * beats, cueSpan: beats, cueIds: 1 };
   }
 
   // ---------------------------------------------------------------- building
@@ -342,14 +364,16 @@ export class Gallery {
   /// What `amount` means depends on the kind, and getting it wrong makes a whole
   /// class of effect look broken. A transition reads it as its position through
   /// the wipe, so it has to sweep or the card shows one frozen slice. A post
-  /// effect reads it as wet/dry. textcomposite reads it as a style index.
+  /// effect reads it as wet/dry. textcomposite reads it as a style index, and
+  /// there are ten of them behind that one card, so it steps through them rather
+  /// than showing the wavy scroller and implying that is all there is.
   amountFor(manifest, t) {
     if (manifest.kind === 'transition') {
       const k = (t % WIPE_PERIOD) / WIPE_PERIOD;
       // Hold at each end so both sides of the wipe are visible.
       return Math.min(1, Math.max(0, (k - 0.15) / 0.7));
     }
-    if (manifest.id === 'textcomposite') return 0;
+    if (manifest.id === 'textcomposite') return Math.floor(t / LYRIC_STEP) % LYRIC_STYLES;
     return 1;
   }
 
