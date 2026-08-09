@@ -36,11 +36,11 @@ builder.WebHost.ConfigureKestrel(k =>
     k.Limits.MaxRequestBodySize = null;
 });
 
+// Both live next to the executable in a deployed build, and are created here so a
+// fresh install has them before anything asks to write.
+AppPaths.EnsureDataDirs();
 var projectsRoot = AppPaths.DefaultProjectsRoot;
-Directory.CreateDirectory(projectsRoot);
-
 var assetsRoot = AppPaths.AssetsRoot;
-Directory.CreateDirectory(assetsRoot);
 
 builder.Services.AddSingleton(new ProjectStore(projectsRoot));
 builder.Services.AddSingleton(new AssetCatalog(assetsRoot));
@@ -567,6 +567,7 @@ var url = addresses.First().Replace("http://[::]", "http://127.0.0.1");
 Console.WriteLine($"Imagine3D backend  {url}");
 Console.WriteLine($"  web root   {AppPaths.WebRoot}{(AppPaths.ServingFromSource ? "  (live from source)" : "")}");
 Console.WriteLine($"  projects   {projectsRoot}");
+Console.WriteLine($"  assets     {assetsRoot}");
 Console.WriteLine($"  effects    {app.Services.GetRequiredService<EffectRegistryProvider>().Current.All.Count}");
 
 if (headless)

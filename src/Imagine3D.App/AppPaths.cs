@@ -3,6 +3,11 @@ namespace Imagine3D.App;
 /// Where the app finds its own files. Web assets are served from the source tree
 /// when it can be found, so editing a shader and hitting reload is enough - no
 /// rebuild. A published build falls back to the copied wwwroot.
+///
+/// Everything the app *writes* - projects, converted assets - goes under DataRoot,
+/// which for a published build is the executable's own directory. A deployed copy
+/// therefore never reads or writes above itself, and never guesses at a location
+/// outside the install.
 public static class AppPaths
 {
     public static string WebRoot { get; } = ResolveWebRoot();
@@ -10,12 +15,17 @@ public static class AppPaths
 
     public static string WorkflowsDir { get; } = ResolveWorkflows();
 
-    public static string DefaultProjectsRoot { get; } = ResolveProjectsRoot();
+    /// Everything the app writes lives under here. A deployed build keeps it next
+    /// to the executable, so the install is self-contained and portable: nothing
+    /// is ever written to a directory above the exe, and nothing depends on the
+    /// working directory the shortcut happened to start us in.
+    public static string DataRoot { get; } = ResolveDataRoot();
+
+    public static string DefaultProjectsRoot { get; } = Path.Combine(DataRoot, "projects");
 
     /// Converted, decimated meshes. Sibling of the projects root so both are
     /// gitignored together and neither is inside the published output.
-    public static string AssetsRoot { get; } =
-        Path.Combine(Path.GetDirectoryName(ResolveProjectsRoot())!, "assets");
+    public static string AssetsRoot { get; } = Path.Combine(DataRoot, "assets");
 
     static string ResolveWebRoot()
     {
@@ -57,26 +67,48 @@ public static class AppPaths
 
     static string ResolveWorkflows()
     {
+        // Copied next to the exe by the build, so this is the normal answer for both
+        // a dev run and a published one.
         var local = Path.Combine(AppContext.BaseDirectory, "workflows");
         if (Directory.Exists(local)) return local;
 
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        for (int i = 0; i < 8 && dir is not null; i++, dir = dir.Parent)
+        // Only the source tree is searched as a fallback: a published install must
+        // never pick up a `workflows` directory that happens to sit above it.
+        if (SourceTreeRoot() is { } root)
         {
-            var candidate = Path.Combine(dir.FullName, "workflows");
+            var candidate = Path.Combine(root, "workflows");
             if (Directory.Exists(candidate)) return candidate;
         }
+
         return local;
     }
 
-    static string ResolveProjectsRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        for (int i = 0; i < 8 && dir is not null; i++, dir = dir.Parent)
-            if (File.Exists(Path.Combine(dir.FullName, "Imagine3D.slnx")))
-                return Path.Combine(dir.FullName, "projects");
+    /// Next to the executable, always - except during a source-tree run, where the
+    /// exe sits in bin/ and a `dotnet clean` or a Debug/Release switch would take
+    /// the projects with it. That case is already identified by the web assets
+    /// having been found in the source tree, and it cannot arise in a published
+    /// build, which serves from its own wwwroot.
+    static string ResolveDataRoot() => SourceTreeRoot() ?? AppContext.BaseDirectory;
 
-        return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Imagine3D", "projects");
+    /// The repository root, when this process is running against the source tree.
+    /// Derived from the web root that was already located rather than by a second
+    /// search, so the two can never disagree about which tree we are in.
+    static string? SourceTreeRoot()
+    {
+        if (!ServingFromSource) return null;
+
+        // WebRoot is <root>/src/Imagine3D.Web.
+        var root = Directory.GetParent(WebRoot)?.Parent;
+        return root is not null && File.Exists(Path.Combine(root.FullName, "Imagine3D.slnx"))
+            ? root.FullName
+            : null;
+    }
+
+    /// Called once at startup: the app should come up with somewhere to write
+    /// already prepared, rather than failing on the first save.
+    public static void EnsureDataDirs()
+    {
+        Directory.CreateDirectory(DefaultProjectsRoot);
+        Directory.CreateDirectory(AssetsRoot);
     }
 }
