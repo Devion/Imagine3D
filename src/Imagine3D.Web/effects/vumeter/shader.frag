@@ -50,7 +50,7 @@ const float CARD_SCALE = 0.96 / 0.50;   // world -> card
 
 // The corridor. Periods must clear twice the unit's half-extents or neighbouring
 // racks intersect and the repeated distance stops being a bound on anything.
-const float WALL = 2.30;   // half-width of the corridor
+const float WALL = 2.75;   // half-width of the corridor
 const float PZ   = 3.05;   // rack spacing along it   (unit is 2.64 wide)
 const float PY   = 1.06;   // rack spacing up the wall (unit is 0.92 tall)
 
@@ -66,11 +66,18 @@ float sdRoundBox3(vec3 p, vec3 b, float r) { return sdBox(p, b - r) - r; }
 /// face its wells are cut into) points inward at the camera, then fold along the
 /// corridor and up the wall. What comes back out is one unit standing at the
 /// origin, exactly as the rest of this shader was written to expect.
+///
+/// The panel's own left-right axis is flipped with the wall, which is the part
+/// that is easy to get wrong. Mirroring in x and then reading the card along a
+/// *shared* +z leaves one of the two walls handed the other way round: its scale
+/// is printed backwards, its red zone sits at the quiet end and its needle falls
+/// as the music gets louder. Nobody notices while only one wall is in frame.
 vec3 toUnit(vec3 p) {
   float ax = abs(p.x);
+  float wall = p.x < 0.0 ? -1.0 : 1.0;
 
   vec3 q;
-  q.x = p.z;               // along the corridor -> across the panel
+  q.x = p.z * wall;        // along the corridor -> across the panel
   q.y = p.y;
   q.z = WALL - ax;         // inward from the wall -> out of the panel face
 
@@ -265,16 +272,43 @@ void main() {
   gWall = p_lean;
 
   vec2 uv = centered(vUv, uAspect);
-  float F = 1.75 + 0.12 * uBeatPulse;
+  // 68 degrees across a 16:9 frame. Wider than this and a corridor this narrow
+  // stops being a corridor: at 90 the walls entered the frame a metre and a half
+  // ahead of the camera, so most of the picture was one wall seen from arm's
+  // length and the vanishing point had nowhere left to sit.
+  //
+  // Set against the frame's width rather than its height, which is the only
+  // thing that carries over to a tall crop. The corridor has walls and no floor
+  // or ceiling, so a ray that leaves the frame's middle vertically never hits
+  // anything: hold the focal length fixed and 9:16 - which sees a third of the
+  // width - is a slot of meters down each edge and empty air between them. The
+  // floor is where widening stops buying wall and starts bending the near
+  // panels.
+  float F = max(1.30, 2.55 * uAspect / 1.7778) + 0.16 * uBeatPulse;
 
-  // Down the middle of the corridor, at the height of a rack, drifting between
-  // the two walls. Looking along it rather than at any one unit: what makes this
-  // a place instead of a product shot is that the panels arrive and leave.
+  // Down the middle of the corridor, half a rack above the row it is flying
+  // past, drifting a little between the two walls. Looking *along* it rather
+  // than at any one unit: what makes this a place instead of a product shot is
+  // that the panels arrive and leave.
+  //
+  // The eye stays near the middle and the pan stays small on purpose. Both used
+  // to be several times this, and a corridor flight only reads as a flight while
+  // the point everything expands out of is in the frame — swing the camera at a
+  // wall it is a metre from and the near panels cover the middle of the picture,
+  // the vanishing point goes off the side, and what is left is a wall of
+  // identical meters sliding sideways. A repeating lattice sliding sideways has
+  // no direction in it at all: it reads as easily as travelling backwards.
+  //
+  // The height is picked against the rack grid rather than in the abstract.
+  // PY * 0.5 puts the eye on the seam between two rows, so the row below is seen
+  // slightly from above and the row over it slightly from below, and the wall
+  // has a horizon in it. Level with a row centre — where this used to sit — the
+  // nearest face is square-on at eye height and blocks what is behind it.
   float travel = uTime * p_travel;
-  vec3 ro = vec3(sin(uTime * 0.13) * WALL * 0.35,
-                 0.10 + sin(uTime * 0.09) * 0.35,
+  vec3 ro = vec3(sin(uTime * 0.13) * WALL * 0.11,
+                 PY * 0.5 + sin(uTime * 0.09) * 0.16,
                  travel);
-  vec3 ta = ro + vec3(sin(uTime * 0.07) * 0.35, sin(uTime * 0.11) * 0.12, 1.0);
+  vec3 ta = ro + vec3(sin(uTime * 0.07) * 0.10, sin(uTime * 0.11) * 0.05, 1.0);
   mat3 cam = lookAt(ro, ta, sin(uTime * 0.05) * 0.05 + uBarPulse * 0.02);
   vec3 rd = normalize(cam * vec3(uv, F));
 

@@ -217,8 +217,8 @@ export class Gallery {
   /// a card still pulses and you can still tell a beat-driven effect from a
   /// free-running one.
   modAt(t) {
+    const start = Math.floor(t / SCENE_SPAN) * SCENE_SPAN;
     if (this.mod) {
-      const start = Math.floor(t / SCENE_SPAN) * SCENE_SPAN;
       return this.mod.at(t, { start, end: start + SCENE_SPAN }, this.lyricCue(t));
     }
 
@@ -228,7 +228,17 @@ export class Gallery {
     const pulse = Math.exp(-(beat * period) * 7);
     const swell = 0.5 + 0.5 * Math.sin(t * 0.3);
     return {
-      t, sceneT: (t % SCENE_SPAN) / SCENE_SPAN, sectionT: (t % 40) / 40, clipT: 0.5,
+      // Scene-relative, exactly as the branch above gets it from Modulation.at.
+      // It is the same clock every free-running effect animates against as
+      // `uTime * p_speed`, and the reason it restarts is the reason given there:
+      // the speed is modulated, and multiplying a moving rate by an unbounded
+      // clock turns a wobble in the music into a phase jump the size of t. A
+      // card left running on this page ran the clock up for as long as the page
+      // was open, and a corridor flight whose speed rides on `energy` was flying
+      // backwards inside a minute. Everything else here stays on song time - the
+      // beat grid and the band followers are where they are in the song.
+      t: t - start,
+      sceneT: (t % SCENE_SPAN) / SCENE_SPAN, sectionT: (t % 40) / 40, clipT: 0.5,
       ...this.lyricCue(t),
       beat, bar, phrase: (t % (period * 16)) / (period * 16),
       beatPulse: pulse, barPulse: Math.exp(-(bar * period * 4) * 2.5), beatStrength: 0.85,
