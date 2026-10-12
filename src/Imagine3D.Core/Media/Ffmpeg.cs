@@ -53,6 +53,48 @@ public sealed partial class Ffmpeg
              $"-update 1 -frames:v 1 \"{outPng}\"");
     }
 
+    /// Write a video's final frame to a PNG.
+    ///
+    /// `-update 1` makes every decoded frame overwrite the same file, so seeking
+    /// to a second before the end and letting it run to the end leaves the last
+    /// frame behind. The obvious alternative - `-vf reverse -frames:v 1` - buffers
+    /// the whole clip in memory to do the same job.
+    public void ExtractLastFrame(string video, string outPng) =>
+        Exec($"-y -hide_banner -loglevel error -sseof -1 -i \"{video}\" -update 1 \"{outPng}\"");
+
+    /// Join clips end to end into one file at a fixed frame rate.
+    ///
+    /// Re-encoded rather than stream-copied, which is the whole reason this is
+    /// here: the renderer drives the clip by setting `currentTime` one frame at a
+    /// time, so `t - insert.start` has to land on the frame it names. A copy keeps
+    /// whatever timestamps LTX wrote and leaves a keyframe only at each clip's
+    /// start, and every seek in between then costs a decode from there. A short
+    /// GOP is cheap here - the source is half-size - and it is what makes seeking
+    /// through a minute-long run as quick as through a five second one.
+    public void Concat(IReadOnlyList<string> parts, string dst, int fps)
+    {
+        if (parts.Count == 0) throw new ArgumentException("nothing to concatenate", nameof(parts));
+
+        var listFile = Path.Combine(Path.GetTempPath(), $"i3d_concat_{Guid.NewGuid():N}.txt");
+        // The concat demuxer's own quoting: forward slashes, and ' closed and
+        // reopened around any literal quote in the path.
+        File.WriteAllLines(listFile, parts.Select(p =>
+            $"file '{p.Replace('\\', '/').Replace("'", @"'\''")}'"));
+
+        try
+        {
+            // -an drops the audio LTX synthesises for every clip; the original MP3
+            // is muxed over the finished video and this track is never heard.
+            Exec($"-y -hide_banner -loglevel error -f concat -safe 0 -i \"{listFile}\" " +
+                 $"-an -r {fps} -c:v libx264 -preset veryfast -crf 16 -pix_fmt yuv420p " +
+                 $"-g {Math.Max(2, fps / 2)} -movflags +faststart \"{dst}\"");
+        }
+        finally
+        {
+            try { File.Delete(listFile); } catch { /* best effort */ }
+        }
+    }
+
     /// Scale to cover then centre-crop, so an image is never stretched out of shape.
     public void FitImage(string src, string outPng, int w, int h)
     {

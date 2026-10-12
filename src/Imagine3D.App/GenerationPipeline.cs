@@ -101,8 +101,11 @@ public sealed class GenerationPipeline(
         {
             // "render" init mode asks the page for a frame of the demo at the insert
             // timestamp, so the LTX clip grows out of the scene it lands on.
+            // The registry is what lets continuous mode leave the scenes alone
+            // whose effect barely lights the frame - see LtxStage.PlanContinuous.
             var ltx = new LtxStage(ffmpeg, AppPaths.WorkflowsDir,
-                snapshot: (t, w, h, token) => SnapshotAsync(t, w, h, token));
+                snapshot: (t, w, h, token) => SnapshotAsync(t, w, h, token),
+                effects: registry.Current);
             storyboard = await ltx.RunAsync(paths, settings, analysis, storyboard, progress, ct);
             File.WriteAllText(paths.StoryboardFile, JsonSerializer.Serialize(storyboard, Json.Indented));
         }

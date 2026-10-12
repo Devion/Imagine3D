@@ -2,6 +2,7 @@
 // All rendering work lives in engine/; this file only orchestrates and displays.
 
 import { CaptureClient } from '../engine/capture.js';
+import { effectiveScenes } from '../engine/timing.js';
 import { ScenePreview } from './scenepreview.js';
 
 const $ = (id) => document.getElementById(id);
@@ -256,12 +257,63 @@ function applySettings(s) {
   $('trim-mb').value = String(s.trimTargetMb ?? 0);
   $('bpm-override').value = s.bpmOverride ?? '';
   $('ltx-enabled').checked = !!s.ltx?.enabled;
+  $('ltx-mode').value = s.ltx?.mode === 'continuous' ? 'continuous' : 'inserts';
   $('ltx-count').value = String(s.ltx?.maxInserts ?? 6);
+  $('ltx-clip-seconds').value = String(s.ltx?.clipSeconds ?? 5);
+  $('ltx-coverage').value = String(Math.round((s.ltx?.coverage ?? 0.5) * 100));
+  $('ltx-mincover').value = String(Math.round((s.ltx?.minEffectCoverage ?? 0.5) * 100));
+  $('ltx-maxclips').value = String(s.ltx?.maxClips ?? 120);
+  $('ltx-carry').checked = !!s.ltx?.carry;
+  $('ltx-strength').value = String(Math.round((s.ltx?.strength ?? 0.9) * 100));
   $('ltx-init').value = s.ltx?.initMode ?? 'render';
   $('ltx-enhance').checked = !!s.ltx?.promptEnhance;
+  refreshLtxPanel();
   $('images-enabled').checked = s.images?.enabled !== false;
   $('images-density').value = String(Math.round((s.images?.density ?? 0.4) * 100));
   $('images-density-out').textContent = `${$('images-density').value}%`;
+}
+
+/// Frames LTX will really produce for a clip of `seconds`.
+///
+/// Its VAE compresses time by 8, so the only lengths it can return are 8n+1
+/// frames and a 1.0s request at 30fps comes back as 0.83s. This has to stay in
+/// step with LtxStage.AlignFrames: a panel that reports what was asked for
+/// instead of what arrives is how "5 second" clips stayed 4.83 second files for
+/// as long as they did.
+function ltxFrames(seconds, fps) {
+  return Math.max(9, Math.floor((Math.max(0.01, seconds) * fps - 1) / 8) * 8 + 1);
+}
+
+/// Show only the controls the chosen mode uses, and say what the numbers in the
+/// panel actually mean before anything is generated.
+function refreshLtxPanel() {
+  const continuous = $('ltx-mode').value === 'continuous';
+  for (const el of document.querySelectorAll('.ltx-continuous'))
+    el.classList.toggle('hidden', !continuous);
+  for (const el of document.querySelectorAll('.ltx-sparse'))
+    el.classList.toggle('hidden', continuous);
+
+  $('ltx-coverage-out').textContent = `${$('ltx-coverage').value}%`;
+  $('ltx-mincover-out').textContent = `${$('ltx-mincover').value}%`;
+  $('ltx-strength-out').textContent = `${$('ltx-strength').value}%`;
+
+  const fps = parseInt($('fps').value, 10) || 30;
+  const frames = ltxFrames(parseFloat($('ltx-clip-seconds').value) || 5, fps);
+  const real = frames / fps;
+  $('ltx-clip-hint').textContent =
+    `${real.toFixed(2)}s — ${frames} frames at ${fps} fps. LTX only makes lengths of ` +
+    '8n+1 frames, so the request rounds down to one it can hold.';
+
+  const duration = state.analysis?.duration ?? state.storyboard?.duration ?? 0;
+  if (!continuous || !duration) { $('ltx-estimate').textContent = ''; return; }
+
+  const wanted = Math.ceil((parseInt($('ltx-coverage').value, 10) / 100) * duration / real);
+  const ceiling = Math.max(1, parseInt($('ltx-maxclips').value, 10) || 120);
+  const clips = Math.min(wanted, ceiling);
+  $('ltx-estimate').textContent =
+    `Up to ${clips} clips — ${Math.round(clips * real)}s of video through ComfyUI` +
+    `${clips < wanted ? `, capped from ${wanted} by the ceiling` : ''}. ` +
+    'Only the first pass pays for it; after that they are cached.';
 }
 
 // ------------------------------------------------------------------ images
@@ -369,8 +421,14 @@ function collectSettings() {
     whisperModel: state.detail?.settings?.whisperModel ?? 'medium',
     ltx: {
       enabled: $('ltx-enabled').checked,
+      mode: $('ltx-mode').value,
       maxInserts: Math.max(1, parseInt($('ltx-count').value, 10) || 6),
-      clipSeconds: 5,
+      clipSeconds: Math.max(0.3, parseFloat($('ltx-clip-seconds').value) || 5),
+      coverage: (parseInt($('ltx-coverage').value, 10) || 50) / 100,
+      minEffectCoverage: (parseInt($('ltx-mincover').value, 10) || 0) / 100,
+      maxClips: Math.max(1, parseInt($('ltx-maxclips').value, 10) || 120),
+      carry: $('ltx-carry').checked,
+      strength: (parseInt($('ltx-strength').value, 10) || 90) / 100,
       initMode: $('ltx-init').value,
       promptEnhance: $('ltx-enhance').checked,
       comfyUrl: state.detail?.settings?.ltx?.comfyUrl ?? 'http://127.0.0.1:8188',
@@ -405,6 +463,9 @@ async function loadAnalysis() {
     const a = await api(`api/projects/${encodeURIComponent(state.project)}/analysis`);
     state.analysis = a;
     renderAnalysis(a);
+    // Continuous LTX sizes its job from the length of the song, which is not
+    // known until this lands.
+    refreshLtxPanel();
     setRunButtons(!state.running);
   } catch {
     state.analysis = null;
@@ -484,7 +545,7 @@ function drawSections(a) {
   strip.innerHTML = a.sections.map((s) => {
     const w = ((s.end - s.start) / a.duration) * 100;
     const marker = s.markers?.[0] ?? '';
-    const title = `${fmtTime(s.start)}–${fmtTime(s.end)} · ${s.label} · energy ${s.energy.toFixed(2)}${
+    const title = `${fmtTime(spans[s.index].start)}–${fmtTime(spans[s.index].end)} · ${s.label} · energy ${s.energy.toFixed(2)}${
       marker ? ` · ${marker}` : ''}`;
     return `<div style="flex:0 0 ${w}%;background:hsl(${hue(s.label)} 55% ${
       35 + s.energy * 35}%)" title="${escapeHtml(title)}">${escapeHtml(s.label)}</div>`;
@@ -529,6 +590,7 @@ function renderStoryboard(sb) {
   // them rather than the first.
   const cuesFor = (index) => (sb.images ?? []).filter((c) => c.sceneIndex === index);
 
+  const spans = effectiveScenes(sb);
   $('storyboard').innerHTML = sb.scenes.map((s) => {
     const cues = cuesFor(s.index);
     return `
@@ -549,6 +611,7 @@ function renderStoryboard(sb) {
           <span class="chip">energy ${s.energy.toFixed(2)}</span>
           <span class="chip">${escapeHtml(s.sectionLabel)}</span>
         </div>
+        ${sceneControls(sb, s)}
         <div class="scene-shot" data-index="${s.index}"></div>
       </div>
     </div>`;
@@ -566,6 +629,58 @@ function renderStoryboard(sb) {
 /// section's energy, because that is the question the user is actually asking when
 /// they open the list - a calm effect on a peak is the one mistake worth steering
 /// away from, and the director will not make it for them here.
+
+function sceneControls(sb, scene) {
+  const fields = (manifest, values = {}) => Object.entries(manifest?.params ?? {}).map(([key, spec]) =>
+    '<label>' + escapeHtml(key) + ' <small>(' + spec.min + '–' + spec.max + ')</small>' +
+    '<input data-param="' + escapeHtml(key) + '" value="' + escapeHtml(values[key] ?? spec.default) +
+    '" title="' + escapeHtml(spec.description ?? '') + '" required></label>').join('');
+  const manifest = state.effects.find(e => e.id === scene.effectId);
+  const max = scene.index + 1 < sb.scenes.length
+    ? Math.max(0, sb.scenes[scene.index + 1].end - sb.scenes[scene.index + 1].start - 1 / sb.fps) : 0;
+  // Existing passes stay in their original order. New passes are appended.
+  const posts = [...scene.post.map(p => state.effects.find(e => e.id === p.effectId)).filter(Boolean),
+    ...state.effects.filter(e => e.kind === 'post' && !scene.post.some(p => p.effectId === e.id) &&
+      (!e.aspects?.length || e.aspects.includes(sb.aspect)))];
+  return '<details class="scene-controls"><summary>Adjust effect, bloom, pixels & duration</summary>' +
+    '<form class="scene-settings" data-index="' + scene.index + '">' +
+    '<p>Values accept numbers or music expressions such as 0.5 + 0.2*beatPulse. Disable Pixelate for native detail; its size sets the horizontal pixel count.</p>' +
+    '<label>Extend into next segment (seconds)<input name="extend" type="number" min="0" max="' + max +
+    '" step="any" value="' + Math.min(max, scene.extendSeconds ?? 0) + '" required></label>' +
+    '<fieldset class="primary-params"><legend>Effect parameters</legend>' + fields(manifest, scene.params) + '</fieldset>' +
+    posts.map(m => {
+      const p = scene.post.find(p => p.effectId === m.id);
+      return '<details class="post-controls" data-effect="' + escapeHtml(m.id) + '"><summary>' + escapeHtml(m.name || m.id) +
+        (p ? ' · enabled' : '') + '</summary><label><input type="checkbox" class="post-enabled"' + (p ? ' checked' : '') +
+        '> Enabled</label><label>Amount (0–1)<input class="post-amount" value="' + escapeHtml(p?.amount ?? '1') +
+        '" required></label>' + fields(m, p?.params) + '</details>';
+    }).join('') + '<button type="submit">Save effect settings</button><span class="save-status" role="status"></span></form></details>';
+}
+
+$('storyboard').addEventListener('submit', async e => {
+  const form = e.target.closest('.scene-settings');
+  if (!form) return;
+  e.preventDefault();
+  const params = el => Object.fromEntries([...el.querySelectorAll('[data-param]')].map(input => [input.dataset.param, input.value.trim()]));
+  const body = {
+    params: params(form.querySelector('.primary-params')),
+    extendSeconds: Number(form.elements.extend.value),
+    post: [...form.querySelectorAll('.post-controls')].filter(el => el.querySelector('.post-enabled').checked)
+      .map(el => ({ effectId: el.dataset.effect, amount: el.querySelector('.post-amount').value.trim(), params: params(el) })),
+  };
+  const button = form.querySelector('[type="submit"]');
+  button.disabled = true;
+  try {
+    await api('api/projects/' + encodeURIComponent(state.project) + '/storyboard/scene/' + form.dataset.index,
+      { method: 'PUT', body: JSON.stringify(body) });
+    await loadStoryboard();
+    hideWarnings();
+  } catch (err) {
+    form.querySelector('.save-status').textContent = err.message;
+    button.disabled = false;
+  }
+});
+
 function sceneOptions(sb, scene) {
   const pool = state.effects
     .filter((e) => SCENE_KINDS.includes(e.kind))
@@ -890,11 +1005,20 @@ for (const b of document.querySelectorAll('#aspect button')) {
   });
 }
 
+const LTX_CONTROLS = ['ltx-enabled', 'ltx-mode', 'ltx-count', 'ltx-clip-seconds',
+                      'ltx-coverage', 'ltx-mincover', 'ltx-maxclips', 'ltx-carry',
+                      'ltx-strength', 'ltx-init', 'ltx-enhance'];
+
 for (const id of ['fps', 'encoder', 'crf', 'supersample', 'seed', 'random-seed', 'bpm-override',
                   'opening-effect', 'trim-enabled', 'trim-minutes', 'trim-mb',
-                  'ltx-enabled', 'ltx-count', 'ltx-init', 'ltx-enhance']) {
+                  ...LTX_CONTROLS]) {
   $(id).addEventListener('change', saveSettingsSoon);
 }
+
+// The panel reports the clip length LTX will really return and the size of the
+// job that implies, so both have to follow the sliders live rather than waiting
+// for the debounced save to come back.
+for (const id of [...LTX_CONTROLS, 'fps']) $(id).addEventListener('input', refreshLtxPanel);
 
 $('btn-open-folder').addEventListener('click', () => {
   const p = state.detail?.output;

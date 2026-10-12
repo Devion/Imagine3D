@@ -2,8 +2,10 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Imagine3D.Audio;
+using Imagine3D.Comfy;
 using Imagine3D.Direct;
 using Imagine3D.Lyrics;
+using Imagine3D.Media;
 using Imagine3D.Projects;
 
 namespace Imagine3D.Tests;
@@ -26,6 +28,9 @@ static class Program
 
         if (args.Length > 0 && args[0] == "--flow")
             return FlowReport(args.Skip(1).ToArray());
+
+        if (args.Length > 0 && args[0] == "--ltx")
+            return LtxReport(args.Skip(1).ToArray());
 
         if (args.Length > 0 && args[0] == "--lyrics")
             return LyricReport(args.Skip(1).ToArray());
@@ -362,6 +367,82 @@ static class Program
             Console.WriteLine($"    hard cut                        {cuts,5}  {100.0 * cuts / pairs,5:0.0}%");
         }
 
+        return 0;
+    }
+
+    /// Where continuous LTX would run over a plan already on disk, and what it
+    /// would cost, without queueing a single ComfyUI job.
+    ///
+    ///   dotnet run --project src/Imagine3D.Tests -- --ltx "<project>" [clipSeconds] [coverage]
+    ///
+    /// The point is the left-hand column: which scenes were left alone, and why.
+    /// A run of clips over an effect that lights a fifth of the frame is not a
+    /// blend, and that is the decision worth being able to see before paying an
+    /// hour of GPU time to find out.
+    static int LtxReport(string[] args)
+    {
+        var name = args.ElementAtOrDefault(0);
+        var root = FindProjectsRoot();
+        var dir = name is null
+            ? Directory.EnumerateDirectories(root)
+                .FirstOrDefault(d => File.Exists(Path.Combine(d, "plan", "storyboard.json")))
+            : Path.Combine(root, name);
+
+        if (dir is null || !File.Exists(Path.Combine(dir, "plan", "storyboard.json")))
+        {
+            Console.WriteLine($"no planned project found under {root}");
+            return 1;
+        }
+
+        var json = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        var sb = JsonSerializer.Deserialize<Storyboard>(
+            File.ReadAllText(Path.Combine(dir, "plan", "storyboard.json")), json)!;
+        var analysisFile = Path.Combine(dir, "analysis", "analysis.json");
+        var analysis = File.Exists(analysisFile)
+            ? JsonSerializer.Deserialize<AudioAnalysis>(File.ReadAllText(analysisFile), json)!
+            : Silence(sb.Duration);
+
+        var registry = EffectRegistry.Load(FindWebRoot());
+        var settings = new ProjectSettings
+        {
+            Aspect = sb.Aspect, Fps = sb.Fps, Seed = sb.Seed,
+            Ltx = new LtxSettings
+            {
+                Mode = "continuous",
+                ClipSeconds = double.TryParse(args.ElementAtOrDefault(1), out var cs) ? cs : 1.0,
+                Coverage = double.TryParse(args.ElementAtOrDefault(2), out var cv) ? cv : 0.5,
+            },
+        };
+        settings.Normalize();
+
+        int frames = LtxStage.AlignFrames(settings.Ltx.ClipSeconds, sb.Fps);
+        double clipLen = frames / (double)sb.Fps;
+
+        Console.WriteLine($"=== Continuous LTX over {Path.GetFileName(dir)} ===");
+        Console.WriteLine($"{sb.Scenes.Length} scenes, {sb.Duration:0}s at {sb.Fps} fps");
+        Console.WriteLine($"clip {settings.Ltx.ClipSeconds:0.##}s asked -> {clipLen:0.###}s " +
+                          $"({frames} frames), covering {settings.Ltx.Coverage:P0}, " +
+                          $"gate {settings.Ltx.MinEffectCoverage:0.00}\n");
+
+        var runs = new LtxStage(new Ffmpeg(), "", effects: registry)
+            .PlanCoverage(sb, analysis, settings,
+                new Progress<Imagine3D.Pipeline.StageProgress>(p => Console.WriteLine($"  {p.Detail}")));
+        Console.WriteLine();
+
+        var byScene = runs.ToDictionary(r => r.SceneIndex);
+        foreach (var s in sb.Scenes)
+        {
+            double cover = registry.Get(s.EffectId)?.Coverage ?? 1.0;
+            var run = byScene.TryGetValue(s.Index, out var r)
+                ? $"{r.Clips,3} clip{(r.Clips == 1 ? " " : "s")} {r.Start,6:0.0}-{r.Start + r.Duration,6:0.0}s"
+                : cover < settings.Ltx.MinEffectCoverage ? "  - too sparse to blend into" : "  -";
+            Console.WriteLine($"  {s.Index,3}  {s.EffectId,-16} cover {cover:0.00}  " +
+                              $"energy {s.Energy:0.00}  {s.Start,6:0.0}-{s.End,6:0.0}s   {run}");
+        }
+
+        double covered = runs.Sum(r => r.Duration);
+        Console.WriteLine($"\n{runs.Sum(r => r.Clips)} clips, {covered:0}s of {sb.Duration:0}s " +
+                          $"({covered / sb.Duration:P0}) across {runs.Count} stretches");
         return 0;
     }
 
@@ -722,6 +803,129 @@ static class Program
                     Aspect = "16:9", Fps = 30, Seed = 7, RandomSeedEachRun = false,
                     Encoder = "h264_nvenc", Crf = 24, SaveTrimmedCopy = true,
                 }, analysis) is null, "a re-encode setting threw away the plan");
+        }
+
+        // Manual grading and duration must survive a new director seed.
+        {
+            var director = new Director(EffectRegistry.Load(FindWebRoot()));
+            var analysis = Silence(60) with { Sections = [
+                new Section(0, 0, 30, "A", 0.4, 1, [], []),
+                new Section(1, 30, 60, "B", 0.6, 0.7, [], [])] };
+            var settings = new ProjectSettings { Seed = 7, Aspect = "16:9", Fps = 30 };
+            var plan = director.Build(analysis, settings, null);
+            var custom = plan.Scenes[0] with {
+                Locked = true, ExtendSeconds = 4,
+                Params = new Dictionary<string, string> { ["speed"] = "0.25" },
+                Post = [new PostEffect("bloom", new() { ["intensity"] = "0.15" }, "0.4")]
+            };
+            plan.Scenes[0] = custom;
+            settings.Seed = 99;
+            var rebuilt = director.Build(analysis, settings, null, plan);
+            fail += Check("Manual parameters, post and extension survive re-planning",
+                rebuilt.Scenes[0].EffectId == custom.EffectId &&
+                rebuilt.Scenes[0].Params["speed"] == "0.25" &&
+                rebuilt.Scenes[0].Post.Single().Params["intensity"] == "0.15" &&
+                rebuilt.Scenes[0].ExtendSeconds == 4,
+                "manual settings were replaced");
+            var roundtrip = JsonSerializer.Deserialize<Storyboard>(JsonSerializer.Serialize(rebuilt))!;
+            fail += Check("Scene extension persists in storyboard JSON",
+                roundtrip.Scenes[0].ExtendSeconds == 4, "extension was lost");
+        }
+
+        // LTX can only return 8n+1 frames, and everything downstream of that -
+        // how a run is tiled, what duration the storyboard claims, whether the
+        // renderer seeks past the end of a clip - is built on getting it right.
+        {
+            fail += Check("A 5s clip at 30fps is the 145 frames LTX has always returned",
+                LtxStage.AlignFrames(5, 30) == 145,
+                $"{LtxStage.AlignFrames(5, 30)} frames");
+
+            var bad = new List<string>();
+            foreach (int fps in new[] { 24, 30, 60 })
+                foreach (double s in new[] { 0.3, 0.5, 0.8, 1.0, 1.5, 2.0, 3.0, 5.0, 10.0 })
+                {
+                    int f = LtxStage.AlignFrames(s, fps);
+                    if ((f - 1) % 8 != 0) bad.Add($"{s}s@{fps}: {f} frames is not 8n+1");
+                    // Rounded down, never up: a clip that overran its slot would
+                    // overlap the next one in a continuous run.
+                    if (f > s * fps && f > 9) bad.Add($"{s}s@{fps}: {f} frames is longer than asked");
+                }
+
+            fail += Check("Clip lengths are ones LTX can hold, and never overrun",
+                bad.Count == 0, string.Join("; ", bad));
+        }
+
+        // Continuous LTX runs under the effects for whole scenes at a time, so the
+        // placement has to hold three things at once: stay inside the scene it was
+        // chosen for, never overlap the next run, and leave alone the effects that
+        // light up too little of the frame to blend with.
+        {
+            var registry = EffectRegistry.Load(FindWebRoot());
+            var scenes = registry.All
+                .Where(e => e.Kind is "scene2d" or "scene3d" or "raymarch")
+                .OrderBy(e => e.Coverage).ToList();
+
+            if (scenes.Count < 2 || scenes[0].Coverage >= 0.5)
+            {
+                Console.WriteLine("  SKIP  Continuous LTX placement -- no sparse effect to gate on");
+            }
+            else
+            {
+                var sparse = scenes[0].Id;                 // least of the frame lit
+                var full = scenes[^1].Id;                  // most
+                double gate = (scenes[0].Coverage + scenes[^1].Coverage) / 2;
+
+                // Twelve 20s scenes, alternating between the two.
+                var plan = new StoryScene[12];
+                for (int i = 0; i < plan.Length; i++)
+                    plan[i] = new StoryScene(i, i * 20, (i + 1) * 20,
+                        i % 2 == 0 ? full : sparse, [], [], "fade", 0.8,
+                        "A", 0.5 + i * 0.01, "test");
+
+                var sb = new Storyboard(
+                    Storyboard.CurrentVersion, 7, "16:9", 30, 240, "", "neon", "",
+                    plan, [], []);
+
+                var settings = new ProjectSettings
+                {
+                    Aspect = "16:9", Fps = 30,
+                    Ltx = new LtxSettings
+                    {
+                        Mode = "continuous", ClipSeconds = 1, Coverage = 1.0,
+                        MinEffectCoverage = gate, MaxClips = 200,
+                    },
+                };
+                settings.Normalize();
+
+                var runs = new LtxStage(new Ffmpeg(), "", effects: registry)
+                    .PlanCoverage(sb, Silence(240), settings);
+
+                var wrong = new List<string>();
+                foreach (var r in runs)
+                {
+                    var scene = plan[r.SceneIndex];
+                    if (scene.EffectId != full)
+                        wrong.Add($"scene {r.SceneIndex} runs over {scene.EffectId}");
+                    if (r.Start < scene.Start || r.Start + r.Duration > scene.End + 1e-6)
+                        wrong.Add($"run at {r.Start:0.##} leaves scene {r.SceneIndex}");
+                }
+                foreach (var (a, b) in runs.OrderBy(r => r.Start).Zip(runs.OrderBy(r => r.Start).Skip(1)))
+                    if (a.Start + a.Duration > b.Start + 1e-6)
+                        wrong.Add($"run at {a.Start:0.##} overlaps the one at {b.Start:0.##}");
+
+                fail += Check("Continuous LTX stays inside the scenes worth blending into",
+                    runs.Count > 0 && wrong.Count == 0,
+                    runs.Count == 0 ? "nothing was placed at all" : string.Join("; ", wrong));
+
+                // The ceiling is the only thing standing between a seven minute
+                // song at 0.8s a clip and a few hundred ComfyUI jobs.
+                settings.Ltx.MaxClips = 11;
+                int clips = new LtxStage(new Ffmpeg(), "", effects: registry)
+                    .PlanCoverage(sb, Silence(240), settings).Sum(r => r.Clips);
+
+                fail += Check("The clip ceiling is a ceiling",
+                    clips <= 11, $"{clips} clips planned against a ceiling of 11");
+            }
         }
 
         // No effect may drive a *rate* from an impulse source.

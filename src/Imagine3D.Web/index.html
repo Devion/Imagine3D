@@ -176,8 +176,41 @@
             <input id="ltx-enabled" type="checkbox">
             <span>Mix in AI video snippets</span>
           </label>
-          <label class="field"><span>Max inserts</span>
-            <input id="ltx-count" type="number" min="1" max="20" value="6">
+          <label class="field"><span>Mode</span>
+            <select id="ltx-mode"
+                    title="Sparse drops a few clips in as events; continuous tiles whole scenes with them so the AI video runs underneath the effects">
+              <option value="inserts">Sparse — a few, as events</option>
+              <option value="continuous">Continuous — runs under the effects</option>
+            </select>
+          </label>
+          <label class="field ltx-sparse"><span>Max inserts</span>
+            <input id="ltx-count" type="number" min="1" max="40" value="6">
+          </label>
+          <label class="field"><span>Clip length (s)</span>
+            <input id="ltx-clip-seconds" type="number" min="0.3" max="20" step="0.1" value="5">
+          </label>
+          <p id="ltx-clip-hint" class="hint"></p>
+          <label class="field ltx-continuous"><span>Cover</span>
+            <input id="ltx-coverage" type="range" min="5" max="100" step="5" value="50">
+            <output id="ltx-coverage-out">50%</output>
+          </label>
+          <label class="field ltx-continuous"
+                 title="An effect that lights up only a corner of the frame has nothing for the clip to mix with — those scenes are left as they are">
+            <span>Only over effects filling</span>
+            <input id="ltx-mincover" type="range" min="0" max="100" step="5" value="50">
+            <output id="ltx-mincover-out">50%</output>
+          </label>
+          <label class="field ltx-continuous"><span>Clip ceiling</span>
+            <input id="ltx-maxclips" type="number" min="1" max="1000" step="10" value="120">
+          </label>
+          <label class="check ltx-continuous"
+                 title="Each clip starts from the last frame of the one before instead of from the demo — one long take, but it drifts away from what the effects are doing">
+            <input id="ltx-carry" type="checkbox">
+            <span>Carry motion between clips</span>
+          </label>
+          <label class="field"><span>Blend strength</span>
+            <input id="ltx-strength" type="range" min="5" max="100" step="5" value="90">
+            <output id="ltx-strength-out">90%</output>
           </label>
           <label class="field"><span>Init frame</span>
             <select id="ltx-init">
@@ -189,6 +222,7 @@
             <input id="ltx-enhance" type="checkbox">
             <span>LTX prompt rewriter</span>
           </label>
+          <p id="ltx-estimate" class="hint"></p>
           <p class="hint">Requires ComfyUI with LTX. Clips are cached, so a
              re-render never regenerates them.</p>
         </div>

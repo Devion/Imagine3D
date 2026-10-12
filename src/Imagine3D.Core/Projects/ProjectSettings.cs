@@ -109,6 +109,8 @@ public sealed class ProjectSettings
         TrimTargetMb = TrimTargetMb <= 0 ? 0 : Math.Clamp(TrimTargetMb, 5, 4000);
         Images ??= new ImageSettings();      // absent from a project.json written before images existed
         Images.Normalize();
+        Ltx ??= new LtxSettings();
+        Ltx.Normalize();
         if (Seed == 0) Seed = 1;
         var (w, h) = Resolution;
         Width = Even(w);
@@ -149,8 +151,51 @@ public sealed class ImageSettings
 public sealed class LtxSettings
 {
     public bool Enabled { get; set; } = false;
+
+    /// "inserts" drops a handful of clips into the demo as punctuation.
+    ///
+    /// "continuous" tiles whole stretches of the song with back-to-back clips
+    /// instead, so the AI video runs *underneath* the effects rather than
+    /// arriving and leaving. Each clip still starts from the frame of the demo it
+    /// lands on, so a run stays locked to what the effects are doing however long
+    /// it goes on for - that is what makes it blend rather than sit on top.
+    public string Mode { get; set; } = "inserts";
+
     public int MaxInserts { get; set; } = 6;
     public double ClipSeconds { get; set; } = 5;
+
+    /// continuous: roughly what share of the song the clips should cover, 0..1.
+    /// The rest of the video is the demo alone, which is the point - see
+    /// MinEffectCoverage for which stretches get dropped.
+    public double Coverage { get; set; } = 0.5;
+
+    /// continuous: leave alone any scene whose effect lights up less than this
+    /// share of the frame (EffectManifest.Coverage).
+    ///
+    /// A clip mixed over `apollonian` - 0.29, a small bright solid on black - is
+    /// not a blend, it is the clip playing with a fractal sitting in front of it,
+    /// because through screen or add most of the frame has nothing to mix with.
+    /// The effects worth blending into are the ones that fill the picture.
+    public double MinEffectCoverage { get; set; } = 0.5;
+
+    /// continuous: hard ceiling on clips generated in one pass, so asking for
+    /// 0.8s clips over a seven minute song cannot quietly queue up 500 of them.
+    public int MaxClips { get; set; } = 120;
+
+    /// continuous: start each clip from the previous clip's last frame rather than
+    /// from a fresh frame of the demo.
+    ///
+    /// Off, the run resamples the demo every clip: perfectly in step with the
+    /// effects, and it restarts its own motion each time. On, the LTX video is one
+    /// continuous take that drifts away from what the demo is doing - and keeps
+    /// drifting, since every clip inherits the last one's errors. Off is the
+    /// safer look; on is worth trying on a scene that barely moves.
+    public bool Carry { get; set; }
+
+    /// How hard the clips are mixed in, 0..1 - the ceiling of the opacity
+    /// expression written into each insert. 0.9 is what every insert used before
+    /// this was a setting.
+    public double Strength { get; set; } = 0.9;
 
     /// "render" uses a frame from our own 3D scene as the LTX init image, so the
     /// clip flows out of the demo instead of cutting to unrelated imagery.
@@ -163,4 +208,21 @@ public sealed class LtxSettings
 
     public string ComfyUrl { get; set; } = "http://127.0.0.1:8188";
     public string ComfyRoot { get; set; } = @"D:\AI\ComfyUI\ComfyUI";
+
+    public bool Continuous => Mode.Equals("continuous", StringComparison.OrdinalIgnoreCase);
+
+    public void Normalize()
+    {
+        if (!Continuous) Mode = "inserts";
+        MaxInserts = Math.Clamp(MaxInserts, 1, 40);
+        // The floor is the shortest thing LTX can be asked for at all: its VAE
+        // compresses time by 8, so the smallest clip worth having is 9 frames -
+        // 0.3s at 30fps. See LtxStage.AlignFrames.
+        ClipSeconds = Math.Clamp(ClipSeconds, 0.3, 20);
+        Coverage = Math.Clamp(Coverage, 0.05, 1);
+        MinEffectCoverage = Math.Clamp(MinEffectCoverage, 0, 1);
+        MaxClips = Math.Clamp(MaxClips, 1, 1000);
+        Strength = Math.Clamp(Strength, 0.05, 1);
+        if (InitMode is not ("render" or "sdxl")) InitMode = "render";
+    }
 }

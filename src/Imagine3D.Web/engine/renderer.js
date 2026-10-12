@@ -15,6 +15,7 @@ import {
   VERTEX_SHADER, UNIFORM_PREAMBLE, createProgram, resolveIncludes,
 } from './gl.js';
 import { EffectRegistry, compileSceneParams, evalParams } from './registry.js';
+import { effectiveScenes } from './timing.js';
 import { Modulation } from './modulation.js';
 import { getPalette } from './palettes.js';
 import { TextLayer } from './textlayer.js';
@@ -87,7 +88,7 @@ export class Renderer {
   /** Load the analysis + storyboard and warm up every effect they reference. */
   async load(analysis, storyboard, mediaBase) {
     this.analysis = analysis;
-    this.storyboard = storyboard;
+    this.storyboard = { ...storyboard, scenes: effectiveScenes(storyboard) };
     this.mod = new Modulation(analysis);
     this.palette = getPalette(storyboard.palette);
     this.seed = (storyboard.seed ?? 1) * 0.618;
@@ -312,7 +313,7 @@ export class Renderer {
     // drops its image on the first frame of the edit, which is a pop *before*
     // the transition rather than during it. Same reasoning as grading each scene
     // separately; see renderSceneWithPost.
-    const tt = Math.min(Math.max(t, scene.start), scene.end);
+    const tt = Math.min(Math.max(t, scene.sourceStart ?? scene.start), scene.sourceEnd ?? scene.end);
     for (const c of cues)
       if (c.sceneIndex === scene.index && tt >= c.start && tt <= c.end) return c;
     return null;
@@ -326,7 +327,7 @@ export class Renderer {
     const img = this.images.get(cue.file);
     if (!img) return null;
 
-    const tt = Math.min(Math.max(t, scene.start), scene.end);
+    const tt = Math.min(Math.max(t, scene.sourceStart ?? scene.start), scene.sourceEnd ?? scene.end);
     const imageT = Math.min(1, Math.max(0, (tt - cue.start) / Math.max(1e-6, cue.end - cue.start)));
     return { img, imageT };
   }
@@ -401,7 +402,9 @@ export class Renderer {
       if (!this.registry.instances.get(p.effectId)) continue;
 
       const amountFn = this.compiled.get(`s${scene.index}a${i}`)?.__amount;
-      const pState = { ...state, amount: amountFn ? amountFn(state.mod) : 1 };
+      const amount = Math.max(0, Math.min(1, amountFn ? amountFn(state.mod) : 1));
+      if (amount === 0) continue;
+      const pState = { ...state, amount };
       const pParams = evalParams(this.compiled.get(`s${scene.index}p${i}`) ?? {}, state.mod);
 
       this.drawEffect(p.effectId, this.post.write, pState, pParams,

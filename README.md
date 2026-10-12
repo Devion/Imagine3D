@@ -10,7 +10,8 @@ scene, effect and transition from the audio and the lyrics — you supply the so
 - Scenes **blend** as well as cut — 15 transitions plus sustained layering.
 - Drop your own **images** into a project and the director casts them into it.
 - Renders **1080p at ~50–68 fps** on an RTX 5090 — a 5:42 song encodes in about 3 minutes.
-- Optional AI video inserts (LTX via ComfyUI) blended in with screen/multiply/XOR.
+- Optional AI video (LTX via ComfyUI) blended in with screen/multiply/XOR — as a
+  few inserts, or running continuously underneath the effects.
 
 ```
 dotnet run --project src/Imagine3D.App          # desktop window
@@ -31,7 +32,8 @@ dotnet run --project src/Imagine3D.Tests        # DSP unit tests + analysis repo
                       per-section TAGS (never effect names)
 3  Build storyboard   deterministic scorer resolves tags -> effects, picks post
                       stacks, transitions, text cues.  Seeded = reproducible
-4  Generate LTX       optional; ComfyUI + LTX 2.3, cached by prompt hash
+4  Generate LTX       optional; ComfyUI + LTX 2.3, cached by prompt hash.  A few
+                      inserts, or whole scenes tiled end to end (see AI video)
 5  Render frames      lockstep, frame N drawn at exactly t = N/fps
 6  Encode + mux       raw RGBA -> ffmpeg stdin -> H.264 + the original MP3
 ```
@@ -414,6 +416,70 @@ project with no images, because an image effect with no image is a black frame.
 
 ---
 
+## AI video (LTX)
+
+Off by default, and it needs ComfyUI with LTX 2.3. When it is on, clips are
+generated from **a frame of the demo at the moment they land** and mixed into the
+finished picture with a blend operator — screen, add, multiply, difference, XOR.
+They are never cut to. A failed or skipped LTX stage still leaves a complete
+video.
+
+Two shapes:
+
+| mode | what it is |
+|---|---|
+| **Sparse** | a handful of clips over the loudest scenes, each an event that arrives and leaves |
+| **Continuous** | whole scenes tiled end to end with short clips, so the AI video runs *underneath* the effects for a stretch at a time |
+
+Continuous is not one long insert. Each clip starts from the demo frame at its
+own start time, so a two-minute run never drifts away from what the effects are
+doing — which is the only reason a sustained overlay reads as a blend rather than
+as a video with a demo on top of it. The clips of a run are joined into one file
+per scene, so the renderer holds one `<video>` per stretch instead of one per
+second of song.
+
+**It stops for the scenes it would fight with.** The gate is the effect's own
+declared `coverage`. A clip mixed over `apollonian` — 0.29, a small bright solid
+on black — is not a blend, it is the clip playing with a fractal in front of it,
+because through screen or add most of the frame has nothing to mix with. So those
+scenes are left as they are, and the run resumes on the next one that fills the
+frame. Scenes carrying one of your own images rank down too: a photograph, an
+effect and a clip at once is three pictures competing.
+
+**Clip length is not free-form.** LTX's VAE compresses time by 8, so the only
+lengths it can return are 8n+1 frames — a 5s request at 30fps has always come
+back as 4.83s. The panel says what you will actually get, and short clips are
+genuinely available: 1.0s → 0.83s, 0.5s → 0.30s. Short clips re-anchor to the
+demo more often and cost more ComfyUI time for the same coverage.
+
+| setting | what it does |
+|---|---|
+| `mode` | `inserts` or `continuous` |
+| `clipSeconds` | requested clip length; rounded down to something LTX can hold |
+| `coverage` | continuous: roughly what share of the song to cover |
+| `minEffectCoverage` | continuous: the frame-fill below which a scene is left alone |
+| `maxClips` | continuous: hard ceiling on clips generated in one pass |
+| `carry` | continuous: start each clip from the previous clip's last frame — one continuous take, but it drifts away from the demo and keeps drifting |
+| `strength` | how hard the clips are mixed in; 0.9 is what inserts always used |
+
+The budget is shared out by giving every eligible scene a run first and only then
+pouring what is left back over them in proportion to the room each has. Handing
+it to the best-scoring scenes until it runs out is the obvious rule and it is the
+wrong one — on a real eight minute plan it spent all 120 clips on the last six
+scenes and left the first four minutes with nine seconds of video in it.
+
+To see where a run would go, and what it would cost, without queueing a single
+ComfyUI job:
+
+```
+dotnet run --project src/Imagine3D.Tests -- --ltx "<project>" [clipSeconds] [coverage]
+```
+
+It prints every scene, its coverage, and either the stretch it gets or why it was
+left alone.
+
+---
+
 ## Adding an effect
 
 One folder under `src/Imagine3D.Web/effects/<id>/`. It is discovered on the next
@@ -690,6 +756,10 @@ pending your call on whether you want that licence attached to the output.
   already up (~35s), renders a frame of the demo as the init image, generates the
   clip and blends it in. Clips are cached by prompt hash, so a re-render never
   regenerates them.
+- **Continuous LTX is as slow as it sounds.** Covering half of an eight minute
+  song at 0.83s a clip is ~290 generations; the clip ceiling exists so that
+  cannot be queued by accident, and the panel says how many before you start.
+  Everything is cached, so only the first pass pays for it.
 - Seeded from `project.json`: the same project always renders the same video.
   *Reroll* bumps the seed deliberately.
 

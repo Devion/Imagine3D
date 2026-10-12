@@ -391,11 +391,11 @@
   },
   "320:301": {
     "inputs": {
-      "value": %DURATION%
+      "value": %FRAMES%
     },
     "class_type": "PrimitiveInt",
     "_meta": {
-      "title": "Duration"
+      "title": "Frame count"
     }
   },
   "320:302": {
@@ -665,7 +665,7 @@
   },
   "320:323": {
     "inputs": {
-      "expression": "a * b + 1",
+      "expression": "a",
       "values.a": [
         "320:301",
         0

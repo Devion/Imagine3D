@@ -28,7 +28,8 @@ void main() {
   }
 
   vec3 glow = sum / max(total, 1e-4) * p_intensity;
-  vec3 col = base + glow * clamp(uAmount, 0.0, 1.0);
+  // Screen the glow into the remaining highlight headroom instead of clipping.
+  vec3 col = base + (1.0 - base) * (1.0 - exp(-max(glow, vec3(0.0)) * clamp(uAmount, 0.0, 1.0)));
 
   fragColor = vec4(col, 1.0);
 }

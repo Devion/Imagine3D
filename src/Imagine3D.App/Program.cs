@@ -193,7 +193,9 @@ app.MapPut("/api/projects/{name}/settings", (ProjectStore store, string name, Pr
     current.DownbeatOffsetOverride = incoming.DownbeatOffsetOverride;
     current.LyricAlignment = incoming.LyricAlignment;
     current.WhisperModel = incoming.WhisperModel;
-    current.Ltx = incoming.Ltx;
+    // Replaced wholesale, so the UI has to send every field back - but a request
+    // that omits the block entirely must not wipe the ComfyUI paths with it.
+    current.Ltx = incoming.Ltx ?? current.Ltx;
     current.Images = incoming.Images ?? current.Images;
     // Aspect drives resolution, so clear any stale explicit size.
     current.Width = 0;
@@ -344,7 +346,11 @@ app.MapPut("/api/projects/{name}/storyboard/scene/{index:int}",
     var projectImages = paths.ListImages();
 
     StoryScene edited;
-    if (wanted.Length == 0)
+    if (req.EffectId is null)
+    {
+        edited = scene with { Locked = true };
+    }
+    else if (wanted.Length == 0)
     {
         // Back to auto. The effect stays on screen until the next plan, because
         // blanking the row would say the scene has nothing to draw, which is false.
@@ -379,6 +385,36 @@ app.MapPut("/api/projects/{name}/storyboard/scene/{index:int}",
             Why = "chosen by hand",
             Locked = true,
         };
+    }
+
+    var manifest = registry.Current.Get(edited.EffectId);
+    if (manifest is null && req.Params is not null)
+        return Results.BadRequest(new { error = "Choose an available effect before editing parameters." });
+    if (req.Params is not null)
+    {
+        if (req.Params.Any(p => !manifest!.Params.ContainsKey(p.Key) || string.IsNullOrWhiteSpace(p.Value)))
+            return Results.BadRequest(new { error = "Unknown or empty effect parameter." });
+        edited = edited with { Params = req.Params };
+    }
+    if (req.Post is not null)
+    {
+        foreach (var p in req.Post)
+        {
+            var pm = registry.Current.Get(p.EffectId);
+            if (pm is null || pm.Kind != "post" || !pm.SupportsAspect(storyboard.Aspect) ||
+                p.Params is null || string.IsNullOrWhiteSpace(p.Amount) ||
+                p.Params.Any(kv => !pm.Params.ContainsKey(kv.Key) || string.IsNullOrWhiteSpace(kv.Value)))
+                return Results.BadRequest(new { error = "Invalid post effect or parameter." });
+        }
+        edited = edited with { Post = req.Post };
+    }
+    if (req.ExtendSeconds is double extend)
+    {
+        var max = index + 1 < storyboard.Scenes.Length
+            ? Math.Max(0, storyboard.Scenes[index + 1].Duration - 1.0 / storyboard.Fps) : 0;
+        if (!double.IsFinite(extend) || extend < 0 || extend > max)
+            return Results.BadRequest(new { error = $"Extension must be between 0 and {max:0.###} seconds." });
+        edited = edited with { ExtendSeconds = extend };
     }
 
     var scenes = storyboard.Scenes.ToArray();
@@ -670,7 +706,8 @@ static bool Clashes(EffectRegistry registry, EffectManifest scene, string postId
 // ---------------------------------------------------------------- DTOs
 
 record ClientLog(string Level, string Message, string? Stack);
-record SceneEditRequest(string? EffectId);
+record SceneEditRequest(string? EffectId, Dictionary<string, string>? Params = null,
+    PostEffect[]? Post = null, double? ExtendSeconds = null);
 record CreateRequest(string Name);
 record ImportRequest(string Path);
 /// Either form is accepted: one path, a list of them, or a folder in either.

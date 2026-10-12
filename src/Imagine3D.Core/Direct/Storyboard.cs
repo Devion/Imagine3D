@@ -79,7 +79,9 @@ public sealed record StoryScene(
     /// Set when the effect was chosen by hand rather than by the director. Re-planning
     /// keeps it, so picking an effect in the UI and then pressing Generate does not
     /// silently throw the choice away.
-    bool Locked = false)
+    bool Locked = false,
+    /// Seconds to hold this shot into the following segment before its transition.
+    double ExtendSeconds = 0)
 {
     public double Duration => End - Start;
 }

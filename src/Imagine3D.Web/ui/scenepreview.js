@@ -1,3 +1,4 @@
+import { effectiveScenes } from '../engine/timing.js';
 // Play one scene of the storyboard, in place, in the list.
 //
 // This is the question the scene list actually asks - "is this the right effect
@@ -75,7 +76,7 @@ export class ScenePreview {
   async play(index, ctx) {
     this.stop();
 
-    const scene = ctx.storyboard.scenes[index];
+    const scene = effectiveScenes(ctx.storyboard)[index];
     if (!scene) return;
 
     const slot = document.querySelector(`.scene-shot[data-index="${index}"]`);

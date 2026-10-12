@@ -130,6 +130,7 @@ public sealed class Director(EffectRegistry registry)
             var pinned = held is null && i == 0
                 ? FindOpener(candidates, settings.OpeningEffect)
                 : null;
+            var manual = held is not null ? previous!.Scenes[i] : null;
             if (held is not null) pick = held;
             else if (pinned is not null) pick = pinned;
             recent.Add(pick.Id);
@@ -158,8 +159,8 @@ public sealed class Director(EffectRegistry registry)
                 Start: sec.Start,
                 End: sec.End,
                 EffectId: pick.Id,
-                Params: DefaultParams(pick),
-                Post: post,
+                Params: manual?.Params ?? DefaultParams(pick),
+                Post: manual?.Post ?? post,
                 TransitionIn: transition,
                 TransitionDuration: transitionDur,
                 SectionLabel: sec.Label,
@@ -173,7 +174,8 @@ public sealed class Director(EffectRegistry registry)
                           $"({Flow.Describe(Flow.Affinity(outgoing, pick))})")
                      + (blend is null ? "" : $" - blended ({blend.Mode})"),
                 Blend: blend,
-                Locked: held is not null));
+                Locked: held is not null,
+                ExtendSeconds: manual?.ExtendSeconds ?? 0));
         }
 
         // Its own RNG stream, like the cast and the image placer: which treatment
